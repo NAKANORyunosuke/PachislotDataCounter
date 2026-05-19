@@ -1,0 +1,24 @@
+# Force LF line endings for shell scripts so they remain executable on Linux
+# regardless of contributor OS or git's autocrlf setting.
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# Treat .python-version etc. as text with LF too.
+.python-version text eol=lf
+
+# Common source files — let git decide content, but keep LF on checkout.
+*.py        text eol=lf
+*.toml      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+*.html      text eol=lf
+*.css       text eol=lf
+*.js        text eol=lf
+
+# Binary
+*.png       binary
+*.jpg       binary
+*.uf2       binary
+*.db        binary
