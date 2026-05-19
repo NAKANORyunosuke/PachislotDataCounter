@@ -21,7 +21,10 @@ host/
 ├── data/                 # SQLite DB (events.db)
 ├── systemd/              # systemd ユニット
 ├── scripts/
-│   └── setup_nfc.sh      # PaSoRi セットアップ
+│   ├── setup_apt.sh         # apt 依存 (libusb / pyenv ビルド依存等)
+│   ├── setup_python.sh      # pyenv + Python 3.13.5 + venv + pip install
+│   ├── setup_nfc.sh         # PaSoRi セットアップ
+│   └── install_service.sh   # systemd 登録 + 起動
 └── requirements.txt
 ```
 
@@ -33,9 +36,30 @@ host/
 
 ## セットアップ
 
+### 一括 (推奨)
+
+プロジェクトルートから:
+
+```bash
+bash setup_all.sh
+```
+
+`setup_apt.sh` → `setup_python.sh` → `setup_nfc.sh` を順に実行します.
+systemd サービス登録は含まれません(後述).
+
+### 個別実行
+
+```bash
+sudo bash host/scripts/setup_apt.sh         # apt 依存
+bash       host/scripts/setup_python.sh     # pyenv + Python 3.13.5 + .venv + pip install
+sudo bash  host/scripts/setup_nfc.sh        # PaSoRi (任意)
+sudo bash  host/scripts/install_service.sh  # systemd 登録 + 起動 (任意)
+```
+
+手動で進めたい場合:
+
 ```bash
 cd host
-# pyenv を使う場合
 pyenv install 3.13.5
 pyenv local 3.13.5     # .python-version が既に置いてあるので自動で選択されます
 python -m venv .venv
@@ -68,16 +92,28 @@ host/.venv/bin/python -m nfc
 
 ## 起動
 
-開発時:
+プロジェクトルートから:
 
 ```bash
-cd host
-.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+bash run.sh                          # 0.0.0.0:8000
+bash run.sh --reload                 # dev auto-reload
+HOST=127.0.0.1 PORT=8080 bash run.sh # バインド変更
 ```
+
+`run.sh` は `host/.venv/bin/uvicorn app.main:app` を実行するラッパーです.
+追加引数はそのまま uvicorn に渡ります.
 
 ブラウザで `http://<RPi5 の IP>:8000/` を開く.
 
 ## systemd 登録
+
+スクリプト経由(推奨):
+
+```bash
+sudo bash host/scripts/install_service.sh
+```
+
+手動の場合:
 
 ```bash
 sudo cp host/systemd/pachislot-data-counter.service /etc/systemd/system/

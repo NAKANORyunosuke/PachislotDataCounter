@@ -65,19 +65,37 @@ PachislotDataCounter/
 
 詳細は [`host/README.md`](host/README.md) を参照. **Python 3.13.5** が必要(`host/.python-version` で固定).
 
+一発セットアップ(apt + pyenv/Python + PaSoRi):
+
 ```bash
-cd host
-python -m venv .venv                    # Python 3.13.5
-.venv/bin/pip install -r requirements.txt
-sudo bash scripts/setup_nfc.sh          # PaSoRi を使う場合
-.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+bash setup_all.sh
+```
+
+個別に進めたい場合:
+
+```bash
+sudo bash host/scripts/setup_apt.sh         # apt 依存
+bash       host/scripts/setup_python.sh     # pyenv + Python 3.13.5 + venv
+sudo bash  host/scripts/setup_nfc.sh        # PaSoRi(任意)
+sudo bash  host/scripts/install_service.sh  # systemd 常駐(任意)
+```
+
+起動:
+
+```bash
+bash run.sh                          # 0.0.0.0:8000
+bash run.sh --reload                 # dev auto-reload
+HOST=127.0.0.1 PORT=8080 bash run.sh
 ```
 
 ### Raspberry Pi Pico 側
 
-詳細は [`pico/README.md`](pico/README.md) を参照.
+詳細は [`pico/README.md`](pico/README.md) を参照. Pico に MicroPython を焼いた後で:
 
-`pico/main.py` を MicroPython の入った Pico にコピーするだけです.
+```bash
+bash pico/scripts/setup.sh                  # mpremote を pico/.venv に導入
+bash pico/scripts/flash.sh                  # main.py を Pico に書き込み
+```
 
 ---
 
