@@ -4,3 +4,5 @@
 host/data/*.db
 host/data/*.db-journal
 .env
+run.log
+*.log
