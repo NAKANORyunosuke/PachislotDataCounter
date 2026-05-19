@@ -137,3 +137,4 @@ PachislotDataCounter/
 - [ ] FastAPIバックエンド
 - [ ] Web UI
 - [ ] ログ保存
+
