@@ -109,5 +109,44 @@ sessions  (id, user_id, started_at, ended_at, end_reason)
 現状ユニットテストはない. 動作確認は:
 
 1. `host/.venv/bin/python -c "from app.main import app; print([r.path for r in app.routes])"` でルート登録を確認
-2. `.venv/bin/uvicorn app.main:app` で起動し `curl http://localhost:8000/api/counts`
+2. `bash run.sh` で起動し `curl http://localhost:8000/api/counts`
 3. PaSoRi がない環境では `nfc_reader` が「nfcpy not installed / NFC reader not available」を出してスキップする(他機能は動く)
+
+## セットアップ / 起動スクリプト
+
+シェルスクリプト経由でセットアップ・起動できる. 詳細は `host/README.md`.
+
+- `setup_all.sh` … ホスト一括 (`setup_apt.sh` → `setup_python.sh` → `setup_nfc.sh`). systemd 登録は含まない
+- `run.sh` … `host/.venv/bin/uvicorn` ラッパー. `HOST` / `PORT` 環境変数で上書き可
+- `host/scripts/install_service.sh` … systemd 登録 + `enable --now`. 自動起動は明示的に分離している
+- `pico/scripts/setup.sh` / `flash.sh` … mpremote 導入と Pico 書き込み. dev マシン or RPi5 のどちらでも実行可
+
+新しくスクリプトを追加するときは:
+
+- shebang `#!/usr/bin/env bash` + `set -euo pipefail`
+- 冪等にする(再実行で壊れない)
+- sudo が必要かどうかを最初に明示し、不適切な権限なら `exit 1`
+- `host/scripts/*.sh` は `PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"` で host ルートを取得する流儀
+
+## Git / コミット規約
+
+- **言語**: コミットメッセージは日本語. 過去ログ (`git log`) のスタイルを真似る(件名: 何をしたか1行、本文: 必要なら箇条書きで列挙)
+- **末尾**: AI を使った場合は `Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>` を最後の行に付ける
+- **粒度**: 機能変更とノイズ差分(改行コード正規化、純粋なフォーマット変更等)は **別コミットに分ける**. レビュー時のシグナルノイズ比を上げるため
+- **ステージング**: `git add -A` / `git add .` は使わない. 必要なファイルを明示的に列挙する(`.env` 等の事故防止)
+- **pre-commit hook**: 失敗したら `--no-verify` で抜けず、原因を直して **新規コミットを作る**(`--amend` ではない. amend は前のコミットを破壊する)
+- **改行コード**: LF 固定. `.gitattributes` で `*.sh` / `*.py` / `*.md` 等を `eol=lf` に強制している. Windows エディタが CRLF を混入させても commit 時に LF へ正規化される
+
+CLI からは HEREDOC で安全にメッセージを渡す:
+
+```bash
+git commit -m "$(cat <<'EOF'
+件名(日本語、簡潔に)
+
+- 変更点 1
+- 変更点 2
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+EOF
+)"
+```
