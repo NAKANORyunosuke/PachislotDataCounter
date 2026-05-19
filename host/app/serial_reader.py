@@ -25,14 +25,25 @@ def parse_line(line: str) -> str | None:
 
 
 async def run_reader(port: str, baud: int = 115200) -> None:
+    # Avoid spamming logs every 3s when the Pico is simply not connected:
+    # warn once per distinct error, demote repeats to debug.
+    last_error_msg: str | None = None
     while True:
         try:
-            logger.info("Opening serial port %s @ %d", port, baud)
             ser = serial.Serial(port, baud, timeout=0.5)
         except (SerialException, FileNotFoundError, OSError) as exc:
-            logger.warning("Cannot open %s: %s. Retrying in 3s.", port, exc)
+            msg = str(exc)
+            if msg != last_error_msg:
+                logger.warning(
+                    "Cannot open %s: %s. Will keep retrying every 3s.", port, exc
+                )
+                last_error_msg = msg
+            else:
+                logger.debug("Still cannot open %s: %s", port, exc)
             await asyncio.sleep(3)
             continue
+        logger.info("Opened serial port %s @ %d", port, baud)
+        last_error_msg = None
         try:
             await _read_loop(ser)
         except SerialException as exc:
