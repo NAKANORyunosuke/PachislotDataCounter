@@ -1,0 +1,20 @@
+[Unit]
+Description=Pachislot Data Counter (FastAPI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nakano
+Group=nakano
+WorkingDirectory=/home/nakano/PachislotDataCounter/host
+ExecStart=/home/nakano/PachislotDataCounter/host/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+# Public URL used to build the registration QR code (Cloudflare Tunnel etc.)
+# Example: Environment=PUBLIC_BASE_URL=https://pachislot.example.com
+#Environment=PUBLIC_BASE_URL=
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,6 @@
 fastapi
 uvicorn[standard]
 pyserial
+nfcpy
+qrcode[pil]
+python-multipart

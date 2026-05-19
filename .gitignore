@@ -1,6 +1,6 @@
-.venv/
-__pycache__/
+**/.venv/
+**/__pycache__/
 *.pyc
-data/*.db
-data/*.db-journal
+host/data/*.db
+host/data/*.db-journal
 .env

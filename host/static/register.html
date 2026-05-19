@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>カード登録</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main>
+    <h1>カード登録</h1>
+    <form id="reg-form" class="form">
+      <label for="name">お名前 / ニックネーム</label>
+      <input id="name" name="name" type="text" required maxlength="64" autocomplete="off" />
+      <button id="submit-btn" type="submit">登録する</button>
+      <div id="msg" class="msg"></div>
+    </form>
+  </main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const token = params.get("token");
+    const msg = document.getElementById("msg");
+    const btn = document.getElementById("submit-btn");
+
+    async function checkToken() {
+      if (!token) {
+        msg.textContent = "トークンがありません。カードをかざし直してください。";
+        btn.disabled = true;
+        return;
+      }
+      try {
+        const res = await fetch(`/api/register/${encodeURIComponent(token)}`);
+        if (!res.ok) {
+          msg.textContent = "このトークンは無効または使用済みです。";
+          btn.disabled = true;
+          return;
+        }
+        const data = await res.json();
+        if (data.registered) {
+          msg.textContent = "このカードは既に登録済みです。";
+          btn.disabled = true;
+        } else {
+          msg.textContent = `カードID: ${data.card_idm}`;
+        }
+      } catch (e) {
+        msg.textContent = "通信エラー: " + e;
+      }
+    }
+
+    document.getElementById("reg-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      btn.disabled = true;
+      const name = document.getElementById("name").value.trim();
+      const body = new FormData();
+      body.append("name", name);
+      try {
+        const res = await fetch(`/api/register/${encodeURIComponent(token)}`, {
+          method: "POST",
+          body,
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          msg.textContent = "登録失敗: " + (err.detail || res.status);
+          btn.disabled = false;
+          return;
+        }
+        const data = await res.json();
+        msg.textContent = `${data.name} さんを登録しました。ブラウザを閉じてOKです。`;
+      } catch (e) {
+        msg.textContent = "通信エラー: " + e;
+        btn.disabled = false;
+      }
+    });
+
+    checkToken();
+  </script>
+</body>
+</html>

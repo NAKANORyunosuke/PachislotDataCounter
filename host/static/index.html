@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pachislot Data Counter</title>
+  <link rel="stylesheet" href="/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Pachislot Data Counter</h1>
+
+    <section id="session-panel" class="panel hidden">
+      <header class="panel-head">
+        <div>
+          <div class="muted">現在のセッション</div>
+          <div id="session-user" class="user-name">-</div>
+          <div id="session-started" class="muted small">-</div>
+        </div>
+        <button id="session-end-hint" class="hint">同じカード再タップで終了</button>
+      </header>
+      <div class="grid">
+        <div class="card big"><div class="label">BB</div><div class="value" id="s-BB">0</div></div>
+        <div class="card reg"><div class="label">RB</div><div class="value" id="s-RB">0</div></div>
+        <div class="card in"><div class="label">IN</div><div class="value" id="s-IN">0</div></div>
+        <div class="card out"><div class="label">OUT</div><div class="value" id="s-OUT">0</div></div>
+      </div>
+      <div class="diff-row">
+        <div class="muted">差枚</div>
+        <div id="s-diff" class="diff-value">0</div>
+      </div>
+    </section>
+
+    <section id="register-panel" class="panel hidden">
+      <h2>新規カード - 登録してください</h2>
+      <p class="muted">スマホで QR を読み取り、お名前を入力してください。</p>
+      <img id="register-qr" class="qr" alt="登録用QRコード" />
+      <p class="muted small"><a id="register-link" href="#" target="_blank">リンクで開く</a></p>
+    </section>
+
+    <section class="panel">
+      <h2>累計</h2>
+      <div class="grid">
+        <div class="card big"><div class="label">BB</div><div class="value" id="BB">0</div></div>
+        <div class="card reg"><div class="label">RB</div><div class="value" id="RB">0</div></div>
+        <div class="card in"><div class="label">IN</div><div class="value" id="IN">0</div></div>
+        <div class="card out"><div class="label">OUT</div><div class="value" id="OUT">0</div></div>
+      </div>
+    </section>
+
+    <section id="user-stats" class="panel hidden">
+      <h2 id="user-stats-title">ユーザー累計</h2>
+      <div class="grid small-grid">
+        <div class="mini-card"><div class="label">BB</div><div class="value" id="u-BB">0</div></div>
+        <div class="mini-card"><div class="label">RB</div><div class="value" id="u-RB">0</div></div>
+        <div class="mini-card"><div class="label">IN</div><div class="value" id="u-IN">0</div></div>
+        <div class="mini-card"><div class="label">OUT</div><div class="value" id="u-OUT">0</div></div>
+      </div>
+    </section>
+
+    <section id="session-chart-panel" class="panel hidden">
+      <h2>セッション別 差枚推移</h2>
+      <canvas id="session-chart" height="200"></canvas>
+    </section>
+
+    <section id="history-panel" class="panel hidden">
+      <h2>セッション履歴</h2>
+      <table class="history">
+        <thead>
+          <tr><th>開始</th><th>終了</th><th>IN</th><th>OUT</th><th>BB</th><th>RB</th><th>差枚</th></tr>
+        </thead>
+        <tbody id="history-body"></tbody>
+      </table>
+    </section>
+
+    <section id="event-log-panel" class="panel">
+      <h2>イベントログ</h2>
+      <ul id="event-log" class="event-log"></ul>
+    </section>
+
+    <p id="status">Connecting...</p>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

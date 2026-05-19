@@ -8,6 +8,7 @@ from serial.serialutil import SerialException
 
 from .db import get_connection, insert_event
 from .events import broadcaster
+from .session_manager import session_manager
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +54,11 @@ async def _read_loop(ser: serial.Serial) -> None:
             logger.debug("Ignored line: %r", line)
             continue
         ts = datetime.now(timezone.utc).isoformat()
+        session_id = session_manager.active_session_id
         with get_connection() as conn:
-            insert_event(conn, event_type, ts)
-        payload = json.dumps({"type": event_type, "ts": ts})
-        print(f"[{ts}] {event_type}", flush=True)
+            insert_event(conn, event_type, ts, session_id)
+        payload = json.dumps(
+            {"kind": "event", "type": event_type, "ts": ts, "session_id": session_id}
+        )
+        print(f"[{ts}] {event_type} session={session_id}", flush=True)
         await broadcaster.publish(payload)
