@@ -29,6 +29,24 @@ apt-get install -y \
 
 echo "==> Enabling and starting pcscd"
 systemctl enable --now pcscd
+
+# Debian Bookworm の pcscd は polkit でアクセス制御するため、SSH/systemd 経由で
+# 実行する uvicorn プロセスから接続を拒否される. 対象ユーザーに明示的に許可する.
+POLKIT_RULE=/etc/polkit-1/rules.d/50-pachislot-pcscd.rules
+echo "==> Writing polkit rule to $POLKIT_RULE (allow user $TARGET_USER)"
+cat >"$POLKIT_RULE" <<EOF
+// Allow the pachislot data counter service user to access pcscd / cards.
+polkit.addRule(function(action, subject) {
+  if ((action.id == "org.debian.pcsc-lite.access_pcsc" ||
+       action.id == "org.debian.pcsc-lite.access_card") &&
+      subject.user == "$TARGET_USER") {
+    return polkit.Result.YES;
+  }
+});
+EOF
+
+echo "==> Restarting pcscd to pick up polkit rule"
+systemctl restart pcscd
 systemctl status pcscd --no-pager || true
 
 if [[ -d "$VENV" ]]; then
