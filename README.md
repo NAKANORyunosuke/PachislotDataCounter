@@ -63,13 +63,13 @@ PachislotDataCounter/
 
 ### Raspberry Pi 5 側
 
-詳細は [`host/README.md`](host/README.md) を参照.
+詳細は [`host/README.md`](host/README.md) を参照. **Python 3.13.5** が必要(`host/.python-version` で固定).
 
 ```bash
 cd host
-python3 -m venv .venv
+python -m venv .venv                    # Python 3.13.5
 .venv/bin/pip install -r requirements.txt
-sudo bash scripts/setup_nfc.sh         # PaSoRi を使う場合
+sudo bash scripts/setup_nfc.sh          # PaSoRi を使う場合
 .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 

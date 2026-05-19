@@ -25,11 +25,20 @@ host/
 └── requirements.txt
 ```
 
+## 必要環境
+
+- **Python 3.13.5** (`.python-version` で固定. pyenv 等で揃えてください)
+  - `pyproject.toml` の `requires-python` は `>=3.13`
+- Raspberry Pi OS Bookworm 標準の Python 3.11 では動作しません. pyenv で 3.13.5 を導入してから venv を作成してください.
+
 ## セットアップ
 
 ```bash
 cd host
-python3 -m venv .venv
+# pyenv を使う場合
+pyenv install 3.13.5
+pyenv local 3.13.5     # .python-version が既に置いてあるので自動で選択されます
+python -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 

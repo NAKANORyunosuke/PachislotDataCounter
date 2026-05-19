@@ -1,0 +1,16 @@
+[project]
+name = "pachislot-data-counter"
+version = "0.1.0"
+description = "Raspberry Pi 5 host application for the pachislot data counter (FastAPI + SQLite + PaSoRi)."
+requires-python = ">=3.13"
+readme = "README.md"
+license = { file = "../LICENSE" }
+authors = [{ name = "NAKANORyunosuke" }]
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pyserial",
+    "nfcpy",
+    "qrcode[pil]",
+    "python-multipart",
+]
