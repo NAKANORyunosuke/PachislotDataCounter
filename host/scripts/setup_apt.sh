@@ -38,6 +38,7 @@ apt-get install -y \
   llvm \
   libusb-1.0-0 \
   libusb-1.0-0-dev \
+  libpcsclite-dev \
   python3-dev \
   sqlite3
 

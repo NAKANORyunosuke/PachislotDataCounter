@@ -12,7 +12,7 @@ Raspberry Pi 5 側では,
 - リアルタイム表示
 - ログ保存
 - Web ダッシュボード表示
-- IC カード(PaSoRi)によるアカウント識別とセッション管理
+- IC カード(PaSoRi RC-S300)によるアカウント識別とセッション管理
 
 を行います.
 
@@ -120,7 +120,7 @@ bash pico/scripts/flash.sh                  # main.py を Pico に書き込み
 - リアルタイム Web 表示 (FastAPI + SSE)
 - イベントログ保存 (SQLite)
 - BB/RB 統計 / 総回転数集計
-- IC カード(PaSoRi RC-S380)によるユーザー識別
+- IC カード(PaSoRi RC-S300, PC/SC + pyscard)によるユーザー識別
 - カードタップによるセッション管理
 - 未登録カードの QR コード経由オンライン登録
 
@@ -140,7 +140,7 @@ bash pico/scripts/flash.sh                  # main.py を Pico に書き込み
 
 - Raspberry Pi 5
 - Raspberry Pi Pico
-- Sony PaSoRi RC-S380 (任意)
+- Sony PaSoRi RC-S300 (任意. USB 054c:0dc9. RC-S380 は nfcpy 撤去のため非対応)
 - ブレッドボード / ジャンパワイヤ / テスター
 
 ---

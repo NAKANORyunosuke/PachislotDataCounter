@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Setup script for PaSoRi RC-S380 on Raspberry Pi 5.
-# - Installs libusb dependency
-# - Installs Python deps into the host/.venv project venv
-# - Drops a udev rule so the reader is accessible without sudo
-# - Blacklists kernel modules that would grab the device first
+# Setup script for PaSoRi RC-S300 (or any CCID-compliant reader) on
+# Raspberry Pi 5. Installs the PC/SC stack and pyscard into host/.venv.
 #
 # Run from the project root:
 #   sudo bash host/scripts/setup_nfc.sh
@@ -19,40 +16,36 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="$PROJECT_DIR/.venv"
 TARGET_USER="${SUDO_USER:-$(logname 2>/dev/null || echo nakano)}"
 
-echo "==> Installing system packages"
+echo "==> Installing PC/SC stack"
 apt-get update
-apt-get install -y libusb-1.0-0 libusb-1.0-0-dev python3-dev
+apt-get install -y \
+  libpcsclite-dev \
+  libusb-1.0-0 \
+  libusb-1.0-0-dev \
+  pcscd \
+  pcsc-tools \
+  opensc \
+  python3-dev
 
-UDEV_RULE=/etc/udev/rules.d/99-pasori.rules
-echo "==> Writing udev rule to $UDEV_RULE"
-cat >"$UDEV_RULE" <<'EOF'
-# Sony PaSoRi RC-S380
-SUBSYSTEM=="usb", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="06c1", GROUP="plugdev", MODE="0664"
-SUBSYSTEM=="usb", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="06c3", GROUP="plugdev", MODE="0664"
-EOF
-
-echo "==> Ensuring user $TARGET_USER is in plugdev group"
-usermod -aG plugdev "$TARGET_USER" || true
-
-BLACKLIST=/etc/modprobe.d/blacklist-nfc.conf
-echo "==> Blacklisting kernel NFC modules in $BLACKLIST"
-cat >"$BLACKLIST" <<'EOF'
-blacklist port100
-blacklist nfc
-EOF
-
-echo "==> Reloading udev rules"
-udevadm control --reload-rules
-udevadm trigger
+echo "==> Enabling and starting pcscd"
+systemctl enable --now pcscd
+systemctl status pcscd --no-pager || true
 
 if [[ -d "$VENV" ]]; then
   echo "==> Installing Python deps into $VENV"
   sudo -u "$TARGET_USER" "$VENV/bin/pip" install -r "$PROJECT_DIR/requirements.txt"
 else
   echo "!! Virtualenv not found at $VENV. Create it first:"
-  echo "     cd host && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
+  echo "     bash host/scripts/setup_python.sh"
 fi
 
-echo
-echo "Done. Unplug and replug the PaSoRi (or reboot) for udev/blacklist to take effect."
-echo "Verify with:  $VENV/bin/python -m nfc"
+cat <<EOF
+
+Done.
+
+Verify the reader is visible:
+  pcsc_scan
+  $VENV/bin/python -c "from smartcard.System import readers; print(readers())"
+
+Tap a FeliCa card; pcsc_scan should print its ATR and IDm.
+EOF

@@ -6,7 +6,7 @@
 
 家スロ用データカウンター. Raspberry Pi Pico がパチスロ実機のドライ接点出力(IN/OUT/RB/BB)を GPIO で読み取り USB シリアルで Raspberry Pi 5 に送信、RPi5 上の FastAPI が SQLite に記録し Web UI と SSE で配信する.
 
-PaSoRi RC-S380 を RPi5 に接続し、IC カードでユーザー識別とセッション管理ができる.
+PaSoRi RC-S300 (USB 054c:0dc9, PaSoRi 4.0) を RPi5 に接続し、IC カードでユーザー識別とセッション管理ができる. RC-S300 は nfcpy 非対応のため、PC/SC (`pcscd`) + `pyscard` 経由で扱う. RC-S380 (旧型, USB 054c:06c1/06c3) はこのスタックでは扱わない.
 
 ## ディレクトリ構造(重要)
 
@@ -44,8 +44,9 @@ PachislotDataCounter/
 cd host
 .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000   # 開発起動
 .venv/bin/python -c "from app.db import init_db; init_db()"  # DB マイグレーション
-.venv/bin/python -m nfc                                       # PaSoRi 認識確認
-sudo bash scripts/setup_nfc.sh                                # PaSoRi 初期設定(プロジェクトルートから sudo bash host/scripts/setup_nfc.sh でも可)
+.venv/bin/python -c "from smartcard.System import readers; print(readers())"  # PaSoRi 認識確認
+pcsc_scan                                                    # PaSoRi の生疎通確認(pcsc-tools)
+sudo bash scripts/setup_nfc.sh                                # PaSoRi 初期設定(pcscd + pyscard. プロジェクトルートから sudo bash host/scripts/setup_nfc.sh でも可)
 ```
 
 ## アーキテクチャ要点
@@ -53,7 +54,7 @@ sudo bash scripts/setup_nfc.sh                                # PaSoRi 初期設
 ### 並行タスク
 `host/app/main.py` の lifespan で 2 つの asyncio タスクが走る:
 - `run_reader` (`serial_reader.py`): Pico からの USB シリアルを read、イベントを DB と SSE に流す
-- `run_nfc_reader` (`nfc_reader.py`): nfcpy で PaSoRi を別スレッド (run_in_executor) でポーリング、タップを `session_manager.handle_tap` に流す
+- `run_nfc_reader` (`nfc_reader.py`): pyscard で PC/SC リーダーを別スレッド (run_in_executor) でポーリング(300ms 間隔, APDU `FF CA 00 00 00` で IDm 取得)、タップを `session_manager.handle_tap` に流す. リーダーは pcscd が掴むので udev ルールや libusb 直叩きは不要
 
 ### セッション状態遷移(非自明)
 `session_manager.SessionManager` がアクティブセッションを単一スロットで保持:
@@ -110,7 +111,7 @@ sessions  (id, user_id, started_at, ended_at, end_reason)
 
 1. `host/.venv/bin/python -c "from app.main import app; print([r.path for r in app.routes])"` でルート登録を確認
 2. `bash run.sh` で起動し `curl http://localhost:8000/api/counts`
-3. PaSoRi がない環境では `nfc_reader` が「nfcpy not installed / NFC reader not available」を出してスキップする(他機能は動く)
+3. PaSoRi / pcscd がない環境では `nfc_reader` が「pyscard is not installed」または「No PC/SC reader detected」を出してスキップする(他機能は動く)
 
 ## セットアップ / 起動スクリプト
 

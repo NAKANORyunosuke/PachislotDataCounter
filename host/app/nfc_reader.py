@@ -1,6 +1,8 @@
-"""PaSoRi RC-S380 polling loop using nfcpy.
+"""IC card reader via PC/SC (pyscard).
 
-Runs in a background thread (nfcpy is blocking) and dispatches tap events to
+Works with any CCID-compliant reader registered with the system pcscd daemon —
+notably PaSoRi RC-S300 (USB 054c:0dc9), which nfcpy does not support. Runs the
+blocking PC/SC poll loop in a background thread and dispatches tap events to
 the asyncio session manager via run_coroutine_threadsafe.
 """
 
@@ -15,28 +17,26 @@ from .session_manager import session_manager
 
 logger = logging.getLogger(__name__)
 
-# Cooldown between accepted taps from the same card, to avoid spamming the
-# session manager while a card sits on the reader.
+# Re-tap cooldown for the *same* IDm. Card-removed events reset this anyway.
 TAP_COOLDOWN_SEC = 1.5
+POLL_INTERVAL_SEC = 0.3
 
-# nfcpy device path. The "usb" form lets libusb pick any supported reader.
-NFC_DEVICE = "usb"
-
-
-def _format_idm(tag) -> Optional[str]:
-    idm = getattr(tag, "identifier", None)
-    if not idm:
-        return None
-    return idm.hex().upper()
+# PC/SC "GET DATA" APDU — CCID readers return the card UID/IDm here.
+APDU_GET_UID = [0xFF, 0xCA, 0x00, 0x00, 0x00]
 
 
 async def run_nfc_reader() -> None:
     try:
-        import nfc  # type: ignore
+        from smartcard.System import readers
+        from smartcard.Exceptions import (
+            CardConnectionException,
+            NoCardException,
+            NoReadersException,
+        )
     except ImportError:
         logger.warning(
-            "nfcpy is not installed. NFC reader disabled. "
-            "Install with: pip install nfcpy"
+            "pyscard is not installed. NFC reader disabled. "
+            "Install with: pip install pyscard (apt: libpcsclite-dev pcscd)"
         )
         return
 
@@ -44,40 +44,67 @@ async def run_nfc_reader() -> None:
     last_idm: Optional[str] = None
     last_ts = 0.0
 
-    def on_connect(tag) -> bool:
+    def dispatch(idm: str) -> None:
         nonlocal last_idm, last_ts
-        idm = _format_idm(tag)
-        if idm is None:
-            logger.debug("Tag without identifier: %r", tag)
-            return False
+        if not idm:
+            return
         now = time.monotonic()
         if idm == last_idm and (now - last_ts) < TAP_COOLDOWN_SEC:
-            return False
+            return
         last_idm = idm
         last_ts = now
         logger.info("Card tapped idm=%s", idm)
         asyncio.run_coroutine_threadsafe(session_manager.handle_tap(idm), loop)
-        # Return False so nfcpy returns immediately without waiting for release.
-        return False
 
     def _poll_forever() -> None:
-        # Reconnect outer loop in case the reader is unplugged mid-run.
+        # Track the IDm of the card currently sitting on the reader so we only
+        # fire one tap per physical presentation; the cooldown above is a
+        # belt-and-braces guard against detection chatter.
+        present_idm: Optional[str] = None
+
         while True:
             try:
-                with nfc.ContactlessFrontend(NFC_DEVICE) as clf:
-                    logger.info("NFC reader ready: %s", clf)
-                    while True:
-                        clf.connect(
-                            rdwr={
-                                "on-connect": on_connect,
-                                "beep-on-connect": False,
-                            }
-                        )
-            except IOError as exc:
-                logger.warning("NFC reader not available (%s). Retrying in 3s.", exc)
+                rs = readers()
+            except NoReadersException:
+                rs = []
+            if not rs:
+                logger.warning(
+                    "No PC/SC reader detected. Is pcscd running? Retrying in 3s."
+                )
                 time.sleep(3)
+                continue
+
+            reader = rs[0]
+            logger.info("PC/SC reader ready: %s", reader)
+
+            try:
+                while True:
+                    conn = reader.createConnection()
+                    try:
+                        conn.connect()
+                        recv, sw1, sw2 = conn.transmit(APDU_GET_UID)
+                        if sw1 == 0x90 and sw2 == 0x00:
+                            idm = bytes(recv).hex().upper()
+                            if idm != present_idm:
+                                present_idm = idm
+                                dispatch(idm)
+                        else:
+                            logger.debug("APDU SW=%02X%02X", sw1, sw2)
+                    except NoCardException:
+                        present_idm = None
+                    except CardConnectionException:
+                        present_idm = None
+                    finally:
+                        try:
+                            conn.disconnect()
+                        except Exception:
+                            pass
+                    time.sleep(POLL_INTERVAL_SEC)
             except Exception:
-                logger.exception("Unexpected NFC reader error. Retrying in 3s.")
+                logger.exception(
+                    "PC/SC reader loop crashed (unplugged?). Retrying in 3s."
+                )
+                present_idm = None
                 time.sleep(3)
 
     await loop.run_in_executor(None, _poll_forever)

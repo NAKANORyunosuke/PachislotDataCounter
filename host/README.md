@@ -11,7 +11,7 @@ host/
 │   ├── db.py             #   SQLite (events / users / sessions)
 │   ├── events.py         #   SSE ブロードキャスタ
 │   ├── serial_reader.py  #   Pico からのシリアル受信
-│   ├── nfc_reader.py     #   PaSoRi (nfcpy) ポーリング
+│   ├── nfc_reader.py     #   PaSoRi (PC/SC + pyscard) ポーリング
 │   └── session_manager.py#   カードタップでのセッション状態遷移
 ├── static/               # Web UI (HTML / CSS / JS)
 │   ├── index.html
@@ -76,18 +76,18 @@ sudo bash host/scripts/setup_nfc.sh
 
 このスクリプトは以下を実施します.
 
-- `libusb` のインストール
-- `host/.venv` に `nfcpy` / `qrcode[pil]` 等を導入
-- `/etc/udev/rules.d/99-pasori.rules` を作成
-- カーネル NFC モジュール (`port100` / `nfc`) を blacklist
-- 実行ユーザを `plugdev` グループに追加
+- PC/SC スタック (`libpcsclite-dev` / `pcscd` / `pcsc-tools` / `opensc`) のインストール
+- `pcscd` の `enable --now`
+- `host/.venv` に `pyscard` / `qrcode[pil]` 等を導入
 
-完了後、PaSoRi を抜き差しするか再起動してください.
+`pcscd` がリーダーを掴むので udev ルールや libusb 直叩きは不要です. PaSoRi RC-S300 (USB 054c:0dc9) 前提.
+旧 RC-S380 は `nfcpy` 撤去のため非対応.
 
 動作確認:
 
 ```bash
-host/.venv/bin/python -m nfc
+pcsc_scan                                                          # 生疎通(タップで ATR/IDm が出る)
+host/.venv/bin/python -c "from smartcard.System import readers; print(readers())"
 ```
 
 ## 起動
