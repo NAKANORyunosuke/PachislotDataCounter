@@ -21,6 +21,14 @@ if [[ ! -x "$VENV/bin/uvicorn" ]]; then
   exit 1
 fi
 
+# Load host/.env (PUBLIC_BASE_URL etc.) so it applies to dev runs too.
+if [[ -f "$HOST_DIR/.env" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$HOST_DIR/.env"
+  set +a
+fi
+
 BIND_HOST="${HOST:-0.0.0.0}"
 BIND_PORT="${PORT:-8000}"
 

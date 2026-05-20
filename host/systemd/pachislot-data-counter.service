@@ -12,9 +12,9 @@ ExecStart=/home/nakano/PachislotDataCounter/host/.venv/bin/uvicorn app.main:app 
 Restart=on-failure
 RestartSec=3
 Environment=PYTHONUNBUFFERED=1
-# Public URL used to build the registration QR code (Cloudflare Tunnel etc.)
-# Example: Environment=PUBLIC_BASE_URL=https://pachislot.example.com
-#Environment=PUBLIC_BASE_URL=
+# App config (PUBLIC_BASE_URL etc.) is read from host/.env — see host/.env.example.
+# Leading "-" makes it optional so the service still starts without the file.
+EnvironmentFile=-/home/nakano/PachislotDataCounter/host/.env
 
 [Install]
 WantedBy=multi-user.target
