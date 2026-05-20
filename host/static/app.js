@@ -9,6 +9,7 @@ const userStatsPanel = document.getElementById("user-stats");
 const historyPanel = document.getElementById("history-panel");
 const chartPanel = document.getElementById("session-chart-panel");
 const eventLogEl = document.getElementById("event-log");
+const bonusOverlay = document.getElementById("bonus-overlay");
 
 let activeSessionId = null;
 let activeUserId = null;
@@ -158,6 +159,21 @@ function handleSessionEnd(payload) {
   resetSessionCounts();
 }
 
+const BONUS_SUB = { BB: "BIG BONUS", RB: "REGULAR BONUS" };
+let bonusTimer = null;
+
+function playBonus(type) {
+  bonusOverlay.className = `bonus-overlay ${type.toLowerCase()}`;
+  bonusOverlay.innerHTML =
+    `<div class="bonus-text">${type}</div>` +
+    `<div class="bonus-sub">${BONUS_SUB[type]}</div>`;
+  // クラス再付与だけではアニメーションが再生されないため reflow で強制リスタート
+  void bonusOverlay.offsetWidth;
+  bonusOverlay.classList.add("show");
+  clearTimeout(bonusTimer);
+  bonusTimer = setTimeout(() => bonusOverlay.classList.remove("show"), 3600);
+}
+
 function handleEvent(payload) {
   if (payload.type in totals) {
     totals[payload.type] += 1;
@@ -170,6 +186,9 @@ function handleEvent(payload) {
   ) {
     sessionCounts[payload.type] += 1;
     renderSessionCounts();
+  }
+  if (payload.type === "BB" || payload.type === "RB") {
+    playBonus(payload.type);
   }
   appendEventLog(payload);
 }

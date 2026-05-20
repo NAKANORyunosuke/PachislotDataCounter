@@ -159,3 +159,61 @@ h2 { font-size: 1.1rem; margin: 0 0 0.75rem; opacity: 0.9; }
 }
 .form button:disabled { opacity: 0.5; cursor: not-allowed; }
 .form .msg { margin-top: 1rem; opacity: 0.8; }
+
+/* BB / RB 当選演出: イベント受信時に全画面オーバーレイで一瞬出す */
+.bonus-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0;
+}
+.bonus-overlay.bb {
+  background: radial-gradient(circle, rgba(176,0,32,0.5), rgba(0,0,0,0.88));
+  color: #ff5252;
+}
+.bonus-overlay.rb {
+  background: radial-gradient(circle, rgba(21,101,192,0.5), rgba(0,0,0,0.88));
+  color: #42a5f5;
+}
+.bonus-overlay.show { animation: bonus-flash 3.6s ease-out forwards; }
+.bonus-overlay .bonus-text {
+  font-size: clamp(4rem, 24vw, 18rem);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-shadow: 0 0 30px currentColor, 0 0 70px currentColor;
+}
+.bonus-overlay .bonus-sub {
+  font-size: clamp(1rem, 4vw, 2.2rem);
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  opacity: 0.9;
+}
+.bonus-overlay.show .bonus-text {
+  animation: bonus-pop 3.6s cubic-bezier(0.2, 1.5, 0.35, 1) forwards;
+}
+
+@keyframes bonus-flash {
+  0%   { opacity: 0; }
+  5%   { opacity: 1; }
+  86%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* ポップインは前半で素早く決め、中盤はスケール1で見せ続け、最後に拡大して退場 */
+@keyframes bonus-pop {
+  0%   { transform: scale(0) rotate(-18deg); }
+  12%  { transform: scale(1.15) rotate(7deg); }
+  18%  { transform: scale(0.94) rotate(-3deg); }
+  24%  { transform: scale(1.04) rotate(0deg); }
+  32%  { transform: scale(1) rotate(0deg); }
+  82%  { transform: scale(1) rotate(0deg); }
+  100% { transform: scale(1.45) rotate(0deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bonus-overlay.show { animation: bonus-flash 1.8s ease-out forwards; }
+  .bonus-overlay.show .bonus-text { animation: none; }
+}
