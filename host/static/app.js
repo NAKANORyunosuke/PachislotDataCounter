@@ -10,10 +10,14 @@ const historyPanel = document.getElementById("history-panel");
 const chartPanel = document.getElementById("session-chart-panel");
 const eventLogEl = document.getElementById("event-log");
 const bonusOverlay = document.getElementById("bonus-overlay");
+const slumpChartPanel = document.getElementById("slump-chart-panel");
 
 let activeSessionId = null;
 let activeUserId = null;
 let chart = null;
+let slumpChart = null;
+let slumpData = [];
+let sessionStartMs = null;
 
 function renderTotals() {
   for (const k of KEYS) document.getElementById(k).textContent = totals[k];
@@ -33,6 +37,63 @@ function renderSessionCounts() {
 
 function resetSessionCounts() {
   for (const k of KEYS) sessionCounts[k] = 0;
+}
+
+// --- 差枚スランプグラフ -------------------------------------------------
+// X 軸は暫定で「セッション開始からの経過時間(分)」。実機の信号仕様が確定し
+// ゲーム数を数えられるようになったら、pushSlumpPoint の x をゲーム数へ差し替える。
+function resetSlump(startedAt) {
+  sessionStartMs = startedAt ? new Date(startedAt).getTime() : Date.now();
+  slumpData = [{ x: 0, y: 0 }];
+  renderSlumpChart();
+}
+
+function pushSlumpPoint() {
+  const x = sessionStartMs ? (Date.now() - sessionStartMs) / 60000 : 0;
+  slumpData.push({ x, y: sessionCounts.OUT - sessionCounts.IN });
+  renderSlumpChart();
+}
+
+function renderSlumpChart() {
+  if (typeof Chart === "undefined") return;
+  slumpChartPanel.classList.toggle("hidden", slumpData.length <= 1);
+  if (!slumpChart) {
+    const ctx = document.getElementById("slump-chart").getContext("2d");
+    slumpChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        datasets: [
+          {
+            label: "差枚",
+            data: slumpData,
+            borderColor: "#ffca28",
+            backgroundColor: "rgba(255,202,40,0.12)",
+            fill: true,
+            pointRadius: 0,
+            borderWidth: 2,
+            tension: 0,
+          },
+        ],
+      },
+      options: {
+        animation: false,
+        parsing: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: {
+            type: "linear",
+            title: { display: true, text: "経過時間 (分)", color: "#aaa" },
+            ticks: { color: "#aaa" },
+            grid: { color: "#2a2a2a" },
+          },
+          y: { ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
+        },
+      },
+    });
+  } else {
+    slumpChart.data.datasets[0].data = slumpData;
+    slumpChart.update("none");
+  }
 }
 
 function fmtTs(iso) {
@@ -145,6 +206,7 @@ function handleSessionStart(payload) {
   activeSessionId = payload.session_id;
   resetSessionCounts();
   renderSessionCounts();
+  resetSlump(payload.started_at);
   sessionPanel.classList.remove("hidden");
   const name = payload.user.name || "(未登録カード)";
   document.getElementById("session-user").textContent = name;
@@ -156,6 +218,7 @@ function handleSessionStart(payload) {
 function handleSessionEnd(payload) {
   activeSessionId = null;
   sessionPanel.classList.add("hidden");
+  slumpChartPanel.classList.add("hidden");
   resetSessionCounts();
 }
 
@@ -186,6 +249,7 @@ function handleEvent(payload) {
   ) {
     sessionCounts[payload.type] += 1;
     renderSessionCounts();
+    if (payload.type === "IN" || payload.type === "OUT") pushSlumpPoint();
   }
   if (payload.type === "BB" || payload.type === "RB") {
     playBonus(payload.type);
