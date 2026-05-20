@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>表示設定</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main>
+    <h1>表示設定</h1>
+    <form id="settings-form" class="form">
+      <p id="who" class="muted"></p>
+      <p class="muted small">モニタに表示するパネルを選んでください。</p>
+      <div id="panel-toggles" class="toggles"></div>
+      <button id="submit-btn" type="submit">保存する</button>
+      <div id="msg" class="msg"></div>
+    </form>
+  </main>
+  <script>
+    // index.html のパネル ID とラベルに対応させる。
+    const PANELS = [
+      ["session-panel", "現在のセッション"],
+      ["slump-chart-panel", "差枚スランプグラフ"],
+      ["totals-panel", "累計"],
+      ["user-stats", "ユーザー累計"],
+      ["session-chart-panel", "セッション別 差枚推移"],
+      ["history-panel", "セッション履歴"],
+      ["event-log-panel", "イベントログ"],
+    ];
+    const userId = new URLSearchParams(location.search).get("user");
+    const msg = document.getElementById("msg");
+    const btn = document.getElementById("submit-btn");
+    const togglesEl = document.getElementById("panel-toggles");
+
+    for (const [id, label] of PANELS) {
+      const wrap = document.createElement("label");
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.dataset.panel = id;
+      cb.checked = true;
+      wrap.append(cb, " " + label);
+      togglesEl.appendChild(wrap);
+    }
+
+    async function load() {
+      if (!userId) {
+        msg.textContent = "ユーザーが指定されていません。カードをかざし直してください。";
+        btn.disabled = true;
+        return;
+      }
+      try {
+        const res = await fetch(`/api/users/${encodeURIComponent(userId)}/settings`);
+        if (!res.ok) {
+          msg.textContent = "ユーザーが見つかりません。";
+          btn.disabled = true;
+          return;
+        }
+        const data = await res.json();
+        document.getElementById("who").textContent =
+          (data.name || "(未登録カード)") + " さんの表示設定";
+        const hidden = (data.display_settings && data.display_settings.hidden_panels) || [];
+        for (const cb of togglesEl.querySelectorAll("input")) {
+          cb.checked = !hidden.includes(cb.dataset.panel);
+        }
+      } catch (e) {
+        msg.textContent = "通信エラー: " + e;
+      }
+    }
+
+    document.getElementById("settings-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      btn.disabled = true;
+      const hidden = [...togglesEl.querySelectorAll("input")]
+        .filter((cb) => !cb.checked)
+        .map((cb) => cb.dataset.panel);
+      try {
+        const res = await fetch(`/api/users/${encodeURIComponent(userId)}/settings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hidden_panels: hidden }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          msg.textContent = "保存失敗: " + (err.detail || res.status);
+          btn.disabled = false;
+          return;
+        }
+        msg.textContent = "保存しました。モニタに反映されます。ブラウザを閉じてOKです。";
+        btn.disabled = false;
+      } catch (e) {
+        msg.textContent = "通信エラー: " + e;
+        btn.disabled = false;
+      }
+    });
+
+    load();
+  </script>
+</body>
+</html>

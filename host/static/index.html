@@ -11,6 +11,19 @@
   <main>
     <h1>Pachislot Data Counter</h1>
 
+    <details id="settings-panel" class="panel">
+      <summary>表示設定</summary>
+      <div id="settings-toggles" class="toggles">
+        <label><input type="checkbox" data-panel="session-panel" checked /> 現在のセッション</label>
+        <label><input type="checkbox" data-panel="slump-chart-panel" checked /> 差枚スランプグラフ</label>
+        <label><input type="checkbox" data-panel="totals-panel" checked /> 累計</label>
+        <label><input type="checkbox" data-panel="user-stats" checked /> ユーザー累計</label>
+        <label><input type="checkbox" data-panel="session-chart-panel" checked /> セッション別 差枚推移</label>
+        <label><input type="checkbox" data-panel="history-panel" checked /> セッション履歴</label>
+        <label><input type="checkbox" data-panel="event-log-panel" checked /> イベントログ</label>
+      </div>
+    </details>
+
     <section id="session-panel" class="panel hidden">
       <header class="panel-head">
         <div>
@@ -30,6 +43,12 @@
         <div class="muted">差枚</div>
         <div id="s-diff" class="diff-value">0</div>
       </div>
+      <details class="settings-qr">
+        <summary>表示設定を変更 (QR)</summary>
+        <p class="muted small">スマホで読み取り、表示するパネルを選べます。</p>
+        <img id="session-settings-qr" class="qr" alt="表示設定QRコード" />
+        <p class="muted small"><a id="session-settings-link" href="#" target="_blank">リンクで開く</a></p>
+      </details>
     </section>
 
     <section id="slump-chart-panel" class="panel hidden">
@@ -44,7 +63,7 @@
       <p class="muted small"><a id="register-link" href="#" target="_blank">リンクで開く</a></p>
     </section>
 
-    <section class="panel">
+    <section id="totals-panel" class="panel">
       <h2>累計</h2>
       <div class="grid">
         <div class="card big"><div class="label">BB</div><div class="value" id="BB">0</div></div>

@@ -20,6 +20,7 @@ from .db import (
     end_session,
     get_user_by_idm,
     get_connection,
+    parse_display_settings,
     sessions_for_user,
     start_session,
 )
@@ -96,6 +97,9 @@ class SessionManager:
                             "name": user["name"],
                             "registered": bool(user["registered"]),
                             "card_idm": card_idm,
+                            "display_settings": parse_display_settings(
+                                user["display_settings"]
+                            ),
                         },
                         "started_at": session["started_at"],
                         "history": history,

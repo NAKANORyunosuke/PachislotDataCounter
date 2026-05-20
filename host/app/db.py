@@ -1,3 +1,4 @@
+import json
 import secrets
 import sqlite3
 from datetime import datetime, timezone
@@ -22,7 +23,8 @@ CREATE TABLE IF NOT EXISTS users (
     name               TEXT,
     registered         INTEGER NOT NULL DEFAULT 0,
     registration_token TEXT    UNIQUE,
-    created_at         TEXT    NOT NULL
+    created_at         TEXT    NOT NULL,
+    display_settings   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_users_card_idm           ON users(card_idm);
 CREATE INDEX IF NOT EXISTS idx_users_registration_token ON users(registration_token);
@@ -41,6 +43,8 @@ CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON sessions(started_at);
 LEGACY_MIGRATIONS = [
     # Older builds may have events without session_id.
     ("events", "session_id", "ALTER TABLE events ADD COLUMN session_id INTEGER REFERENCES sessions(id)"),
+    # Per-user display profile (JSON) added later.
+    ("users", "display_settings", "ALTER TABLE users ADD COLUMN display_settings TEXT"),
 ]
 
 
@@ -185,6 +189,32 @@ def complete_registration(conn: sqlite3.Connection, token: str, name: str) -> di
     )
     conn.commit()
     return get_user_by_id(conn, user["id"])
+
+
+def get_display_settings(conn: sqlite3.Connection, user_id: int) -> dict:
+    row = conn.execute(
+        "SELECT display_settings FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    return parse_display_settings(row["display_settings"]) if row else {}
+
+
+def set_display_settings(conn: sqlite3.Connection, user_id: int, settings: dict) -> None:
+    conn.execute(
+        "UPDATE users SET display_settings = ? WHERE id = ?",
+        (json.dumps(settings), user_id),
+    )
+    conn.commit()
+
+
+def parse_display_settings(raw: str | None) -> dict:
+    """Decode a users.display_settings cell. Missing/corrupt -> empty dict."""
+    if not raw:
+        return {}
+    try:
+        value = json.loads(raw)
+    except (ValueError, TypeError):
+        return {}
+    return value if isinstance(value, dict) else {}
 
 
 # ---------------------------------------------------------------------------

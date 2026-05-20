@@ -212,6 +212,14 @@ function handleSessionStart(payload) {
   document.getElementById("session-user").textContent = name;
   document.getElementById("session-started").textContent = `開始 ${fmtTs(payload.started_at)}`;
   if (payload.user.registered) hideRegisterPanel();
+  applyUserProfile(payload.user.display_settings);
+  const qr = document.getElementById("session-settings-qr");
+  if (qr) qr.src = `/api/qr?user=${payload.user.id}`;
+  const link = document.getElementById("session-settings-link");
+  if (link) {
+    link.href = `${location.origin}/settings?user=${payload.user.id}`;
+    link.textContent = link.href;
+  }
   loadUserHistory(payload.user.id);
 }
 
@@ -220,6 +228,7 @@ function handleSessionEnd(payload) {
   sessionPanel.classList.add("hidden");
   slumpChartPanel.classList.add("hidden");
   resetSessionCounts();
+  applyDefaultLayout();
 }
 
 const BONUS_SUB = { BB: "BIG BONUS", RB: "REGULAR BONUS" };
@@ -288,9 +297,65 @@ source.addEventListener("event", (e) => {
         loadUserHistory(msg.user_id);
       }
       break;
+    case "settings_updated":
+      if (msg.user_id === activeUserId) applyUserProfile(msg.display_settings);
+      break;
   }
 });
 
 source.onerror = () => {
   statusEl.textContent = "Disconnected, retrying...";
 };
+
+// --- 表示設定 -----------------------------------------------------------
+// レイアウトは 2 層:
+//   デフォルト(アイドル時) … この画面の「表示設定」パネル, localStorage 保存
+//   ユーザープロファイル    … カードのユーザーに紐づく設定, セッション中だけ反映
+// .user-off はデータ都合の .hidden とは独立に効く(両方無いときだけ表示).
+const HIDDEN_PANELS_KEY = "pdc-hidden-panels";
+const settingsToggles = document.getElementById("settings-toggles");
+const PANEL_IDS = [...settingsToggles.querySelectorAll("input[data-panel]")].map(
+  (i) => i.dataset.panel
+);
+
+function readDefaultHidden() {
+  try {
+    return JSON.parse(localStorage.getItem(HIDDEN_PANELS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function applyHiddenPanels(hidden) {
+  for (const id of PANEL_IDS) {
+    document.getElementById(id)?.classList.toggle("user-off", hidden.includes(id));
+  }
+}
+
+// デフォルト(アイドル時)レイアウトを反映し、設定パネルのチェック状態も同期.
+function applyDefaultLayout() {
+  const hidden = readDefaultHidden();
+  applyHiddenPanels(hidden);
+  for (const input of settingsToggles.querySelectorAll("input[data-panel]")) {
+    input.checked = !hidden.includes(input.dataset.panel);
+  }
+}
+
+// セッション中: ユーザープロファイルがあればそれを、無ければデフォルトを反映.
+function applyUserProfile(settings) {
+  const hidden =
+    settings && Array.isArray(settings.hidden_panels)
+      ? settings.hidden_panels
+      : readDefaultHidden();
+  applyHiddenPanels(hidden);
+}
+
+settingsToggles.addEventListener("change", () => {
+  const hidden = [...settingsToggles.querySelectorAll("input[data-panel]")]
+    .filter((i) => !i.checked)
+    .map((i) => i.dataset.panel);
+  localStorage.setItem(HIDDEN_PANELS_KEY, JSON.stringify(hidden));
+  applyHiddenPanels(hidden);
+});
+
+applyDefaultLayout();

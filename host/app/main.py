@@ -16,11 +16,13 @@ from .db import (
     count_by_type_for_user,
     events_for_session,
     get_connection,
+    get_display_settings,
     get_session,
     get_user_by_id,
     get_user_by_token,
     init_db,
     sessions_for_user,
+    set_display_settings,
 )
 from .events import broadcaster
 from .nfc_reader import run_nfc_reader
@@ -55,6 +57,14 @@ def _build_register_url(token: str, request: Request | None = None) -> str:
     if request is not None:
         return str(request.url_for("register_page")) + f"?token={token}"
     return f"/register?token={token}"
+
+
+def _build_settings_url(user_id: int, request: Request | None = None) -> str:
+    if PUBLIC_BASE_URL:
+        return f"{PUBLIC_BASE_URL}/settings?user={user_id}"
+    if request is not None:
+        return str(request.url_for("settings_page")) + f"?user={user_id}"
+    return f"/settings?user={user_id}"
 
 
 @asynccontextmanager
@@ -175,15 +185,56 @@ async def post_registration(token: str, name: str = Form(...)) -> dict:
     return {"user_id": user["id"], "name": user["name"]}
 
 
+@app.get("/api/users/{user_id}/settings")
+def get_user_settings(user_id: int) -> dict:
+    with get_connection() as conn:
+        user = get_user_by_id(conn, user_id)
+        if user is None:
+            raise HTTPException(status_code=404, detail="user not found")
+        settings = get_display_settings(conn, user_id)
+    return {"user_id": user_id, "name": user["name"], "display_settings": settings}
+
+
+@app.post("/api/users/{user_id}/settings")
+async def post_user_settings(user_id: int, request: Request) -> dict:
+    body = await request.json()
+    hidden = body.get("hidden_panels", [])
+    if not isinstance(hidden, list) or not all(isinstance(x, str) for x in hidden):
+        raise HTTPException(
+            status_code=400, detail="hidden_panels must be a list of strings"
+        )
+    settings = {"hidden_panels": hidden}
+    with get_connection() as conn:
+        if get_user_by_id(conn, user_id) is None:
+            raise HTTPException(status_code=404, detail="user not found")
+        set_display_settings(conn, user_id, settings)
+    # Push so a monitor with this user's session active re-applies immediately.
+    await broadcaster.publish(
+        json.dumps(
+            {
+                "kind": "settings_updated",
+                "user_id": user_id,
+                "display_settings": settings,
+            }
+        )
+    )
+    return {"user_id": user_id, "display_settings": settings}
+
+
 @app.get("/api/qr")
-def qr_code(token: str) -> Response:
+def qr_code(token: str | None = None, user: int | None = None) -> Response:
     try:
         import qrcode  # type: ignore
     except ImportError:
         raise HTTPException(
             status_code=503, detail="qrcode library not installed"
         )
-    url = _build_register_url(token)
+    if user is not None:
+        url = _build_settings_url(user)
+    elif token:
+        url = _build_register_url(token)
+    else:
+        raise HTTPException(status_code=400, detail="token or user is required")
     img = qrcode.make(url)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
@@ -193,6 +244,12 @@ def qr_code(token: str) -> Response:
 @app.get("/register", response_class=HTMLResponse, name="register_page")
 def register_page() -> HTMLResponse:
     path = STATIC_DIR / "register.html"
+    return HTMLResponse(path.read_text(encoding="utf-8"))
+
+
+@app.get("/settings", response_class=HTMLResponse, name="settings_page")
+def settings_page() -> HTMLResponse:
+    path = STATIC_DIR / "settings.html"
     return HTMLResponse(path.read_text(encoding="utf-8"))
 
 
