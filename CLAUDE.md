@@ -56,6 +56,9 @@ sudo bash scripts/setup_nfc.sh                                # PaSoRi 初期設
 - `run_reader` (`serial_reader.py`): Pico からの USB シリアルを read、イベントを DB と SSE に流す
 - `run_nfc_reader` (`nfc_reader.py`): pyscard で PC/SC リーダーを別スレッド (run_in_executor) でポーリング(300ms 間隔, APDU `FF CA 00 00 00` で IDm 取得)、タップを `session_manager.handle_tap` に流す. リーダーは pcscd が掴むので udev ルールや libusb 直叩きは不要
 
+### pcscd の polkit アクセス制御(非自明・ハマりどころ)
+Debian Bookworm の `pcscd` は polkit でアクセス制御する. SSH セッションや systemd 配下で動く uvicorn プロセスはセッション扱いされず、`pcscd` ログに `Rejected` が出てカードを読めない(`pcsc_scan` を対話シェルで叩くと動くのに、というズレが起きる). `setup_nfc.sh` が `/etc/polkit-1/rules.d/50-pachislot-pcscd.rules` を配置し、対象ユーザーに `org.debian.pcsc-lite.access_pcsc` / `access_card` を許可することで解消している. ユーザー名は `setup_nfc.sh` 実行時の `SUDO_USER` で焼き込まれるので、サービス実行ユーザーを変えたら再実行が必要.
+
 ### セッション状態遷移(非自明)
 `session_manager.SessionManager` がアクティブセッションを単一スロットで保持:
 - アクティブなし + タップ → 新規開始
@@ -118,7 +121,7 @@ sessions  (id, user_id, started_at, ended_at, end_reason)
 シェルスクリプト経由でセットアップ・起動できる. 詳細は `host/README.md`.
 
 - `setup_all.sh` … ホスト一括 (`setup_apt.sh` → `setup_python.sh` → `setup_nfc.sh`). systemd 登録は含まない
-- `run.sh` … `host/.venv/bin/uvicorn` ラッパー. `HOST` / `PORT` 環境変数で上書き可
+- `run.sh` … `host/.venv/bin/uvicorn` ラッパー. `HOST` / `PORT` 環境変数で上書き可. stdout/stderr を `tee` で `run.log`(`LOG_FILE` で変更可)に追記する. `run.log` / `*.log` は `.gitignore` 済み
 - `host/scripts/install_service.sh` … systemd 登録 + `enable --now`. 自動起動は明示的に分離している
 - `pico/scripts/setup.sh` / `flash.sh` … mpremote 導入と Pico 書き込み. dev マシン or RPi5 のどちらでも実行可
 
