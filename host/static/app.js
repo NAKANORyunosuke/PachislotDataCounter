@@ -11,6 +11,12 @@ const chartPanel = document.getElementById("session-chart-panel");
 const eventLogEl = document.getElementById("event-log");
 const bonusOverlay = document.getElementById("bonus-overlay");
 const slumpChartPanel = document.getElementById("slump-chart-panel");
+const gameCountEl = document.getElementById("game-count");
+const renchanZoneEl = document.getElementById("renchan-zone");
+const renchanRemainingEl = document.getElementById("renchan-remaining");
+
+// 直近ボーナスからこのゲーム数以内の当選が「連チャン」(host/app/game_counter.py と一致).
+const RENCHAN_LIMIT = 100;
 
 let activeSessionId = null;
 let activeUserId = null;
@@ -37,6 +43,15 @@ function renderSessionCounts() {
 
 function resetSessionCounts() {
   for (const k of KEYS) sessionCounts[k] = 0;
+}
+
+// 現在のゲーム数と連チャンゾーン(直近ボーナスから 100G 以内)を描画.
+function renderGameInfo(count, inZone) {
+  gameCountEl.textContent = count;
+  renchanZoneEl.classList.toggle("hidden", !inZone);
+  if (inZone) {
+    renchanRemainingEl.textContent = `残り ${Math.max(0, RENCHAN_LIMIT - count)} G`;
+  }
 }
 
 // --- 差枚スランプグラフ -------------------------------------------------
@@ -234,11 +249,19 @@ function handleSessionEnd(payload) {
 const BONUS_SUB = { BB: "BIG BONUS", RB: "REGULAR BONUS" };
 let bonusTimer = null;
 
-function playBonus(type) {
-  bonusOverlay.className = `bonus-overlay ${type.toLowerCase()}`;
-  bonusOverlay.innerHTML =
-    `<div class="bonus-text">${type}</div>` +
-    `<div class="bonus-sub">${BONUS_SUB[type]}</div>`;
+function playBonus(type, renchan = false, winGames = null) {
+  bonusOverlay.className = renchan
+    ? `bonus-overlay ${type.toLowerCase()} renchan`
+    : `bonus-overlay ${type.toLowerCase()}`;
+  let html = "";
+  if (renchan) {
+    html += `<div class="renchan-banner">${
+      winGames != null ? `${winGames}G ` : ""
+    }連チャン!!</div>`;
+  }
+  html += `<div class="bonus-text">${type}</div>`;
+  html += `<div class="bonus-sub">${BONUS_SUB[type]}</div>`;
+  bonusOverlay.innerHTML = html;
   // クラス再付与だけではアニメーションが再生されないため reflow で強制リスタート
   void bonusOverlay.offsetWidth;
   bonusOverlay.classList.add("show");
@@ -260,8 +283,11 @@ function handleEvent(payload) {
     renderSessionCounts();
     if (payload.type === "IN" || payload.type === "OUT") pushSlumpPoint();
   }
+  if ("game_count" in payload) {
+    renderGameInfo(payload.game_count, payload.in_renchan_zone);
+  }
   if (payload.type === "BB" || payload.type === "RB") {
-    playBonus(payload.type);
+    playBonus(payload.type, payload.renchan, payload.win_game_count);
   }
   appendEventLog(payload);
 }
@@ -272,6 +298,7 @@ source.addEventListener("snapshot", (e) => {
   const data = JSON.parse(e.data);
   for (const k of KEYS) totals[k] = data[k] ?? 0;
   renderTotals();
+  renderGameInfo(data.game_count ?? 0, data.in_renchan_zone ?? false);
   statusEl.textContent = "Connected";
 });
 

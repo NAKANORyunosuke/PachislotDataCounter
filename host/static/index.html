@@ -14,6 +14,7 @@
     <details id="settings-panel" class="panel">
       <summary>表示設定</summary>
       <div id="settings-toggles" class="toggles">
+        <label><input type="checkbox" data-panel="machine-panel" checked /> ゲーム数・連チャン</label>
         <label><input type="checkbox" data-panel="session-panel" checked /> 現在のセッション</label>
         <label><input type="checkbox" data-panel="slump-chart-panel" checked /> 差枚スランプグラフ</label>
         <label><input type="checkbox" data-panel="totals-panel" checked /> 累計</label>
@@ -23,6 +24,17 @@
         <label><input type="checkbox" data-panel="event-log-panel" checked /> イベントログ</label>
       </div>
     </details>
+
+    <section id="machine-panel" class="panel">
+      <div class="game-count-row">
+        <span class="muted">現在のゲーム数</span>
+        <span><span id="game-count" class="game-count">0</span> G</span>
+      </div>
+      <div id="renchan-zone" class="renchan-zone hidden">
+        <span class="renchan-zone-label">連チャンゾーン</span>
+        <span id="renchan-remaining">残り 100 G</span>
+      </div>
+    </section>
 
     <section id="session-panel" class="panel hidden">
       <header class="panel-head">

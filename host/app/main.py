@@ -25,6 +25,7 @@ from .db import (
     set_display_settings,
 )
 from .events import broadcaster
+from .game_counter import game_counter
 from .nfc_reader import run_nfc_reader
 from .serial_reader import run_reader
 from .session_manager import session_manager
@@ -41,10 +42,13 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 EVENT_KEYS = ("IN", "OUT", "BB", "RB")
 
 
-def _snapshot() -> dict[str, int]:
+def _snapshot() -> dict:
     with get_connection() as conn:
         counts = count_by_type(conn)
-    return {k: counts.get(k, 0) for k in EVENT_KEYS}
+    snap: dict = {k: counts.get(k, 0) for k in EVENT_KEYS}
+    snap["game_count"] = game_counter.game_count
+    snap["in_renchan_zone"] = game_counter.in_renchan_zone
+    return snap
 
 
 def _zero_counts() -> dict[str, int]:
@@ -70,6 +74,7 @@ def _build_settings_url(user_id: int, request: Request | None = None) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    game_counter.seed_from_db()
     tasks = [
         asyncio.create_task(run_reader(SERIAL_PORT, SERIAL_BAUD)),
         asyncio.create_task(run_nfc_reader()),
@@ -92,7 +97,7 @@ app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/api/counts")
-def get_counts() -> dict[str, int]:
+def get_counts() -> dict:
     return _snapshot()
 
 

@@ -220,6 +220,22 @@ h2 { font-size: 1.1rem; margin: 0 0 0.75rem; opacity: 0.9; }
   animation: bonus-pop 3.6s cubic-bezier(0.2, 1.5, 0.35, 1) forwards;
 }
 
+/* 連チャン(100G 以内当選)専用演出: 通常の BB/RB 演出に金色テーマを重ねる */
+.bonus-overlay.renchan {
+  background: radial-gradient(circle, rgba(255,193,7,0.55), rgba(0,0,0,0.9));
+  color: #ffd54f;
+}
+.bonus-overlay .renchan-banner {
+  font-size: clamp(2rem, 9vw, 6rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 24px currentColor, 0 0 50px currentColor;
+  margin-bottom: 0.4rem;
+}
+.bonus-overlay.show .renchan-banner {
+  animation: bonus-pop 3.6s cubic-bezier(0.2, 1.5, 0.35, 1) forwards;
+}
+
 @keyframes bonus-flash {
   0%   { opacity: 0; }
   5%   { opacity: 1; }
@@ -239,4 +255,36 @@ h2 { font-size: 1.1rem; margin: 0 0 0.75rem; opacity: 0.9; }
 @media (prefers-reduced-motion: reduce) {
   .bonus-overlay.show { animation: bonus-flash 1.8s ease-out forwards; }
   .bonus-overlay.show .bonus-text { animation: none; }
+  .bonus-overlay.show .renchan-banner { animation: none; }
+  .renchan-zone { animation: none; }
+}
+
+/* ゲーム数・連チャンゾーン(machine-panel) */
+.game-count-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.game-count {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.renchan-zone {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #8a6d00, #ffd700, #8a6d00);
+  color: #1a1a1a;
+  font-weight: 800;
+  animation: renchan-zone-pulse 1.4s ease-in-out infinite;
+}
+.renchan-zone.hidden { display: none; }
+.renchan-zone-label { letter-spacing: 0.12em; }
+@keyframes renchan-zone-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(255,215,0,0.45); }
+  50%      { box-shadow: 0 0 22px rgba(255,215,0,0.95); }
 }
