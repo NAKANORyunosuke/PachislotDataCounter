@@ -60,10 +60,17 @@ def broadcast(event: str, data: dict) -> None:
             q.put(chunk)
 
 
+# 連チャン判定の上限ゲーム数 / 1 ゲームあたりのボーナス当選率(テストしやすい値).
+RENCHAN_LIMIT = 100
+BONUS_RATE = 0.015
+
+
 def sim_loop() -> None:
     """擬似的なパチスロ稼働を延々と生成する (デーモンスレッド)."""
     global _active_session
     sid = 0
+    games = 0          # 直近ボーナスからのゲーム数(機械全体, セッションをまたぐ)
+    had_bonus = False
     while True:
         sid += 1
         _active_session = {
@@ -72,20 +79,29 @@ def sim_loop() -> None:
         }
         broadcast("event", _active_session)
         for _ in range(random.randint(60, 160)):
+            games += 1
+            zone = had_bonus and games <= RENCHAN_LIMIT
             for _ in range(3):  # 1 ゲーム = 3 枚投入
-                _emit_event("IN", sid)
+                _emit_event("IN", sid, games, zone)
                 time.sleep(0.04)
             roll = random.random()
-            if roll < 0.05:  # ボーナス当選
+            if roll < BONUS_RATE:  # ボーナス当選
                 bonus = random.choice(["BB", "RB"])
-                _emit_event(bonus, sid)
+                broadcast("event", {
+                    "kind": "event", "type": bonus, "ts": now_iso(), "session_id": sid,
+                    "game_count": 0, "in_renchan_zone": True,
+                    "renchan": had_bonus and games <= RENCHAN_LIMIT,
+                    "win_game_count": games,
+                })
+                games = 0
+                had_bonus = True
                 payout = random.randint(150, 330) if bonus == "BB" else random.randint(70, 120)
                 for _ in range(payout):
-                    _emit_event("OUT", sid)
+                    _emit_event("OUT", sid, games, True)
                     time.sleep(0.008)
             elif roll < 0.4:  # 小役払い出し
                 for _ in range(random.randint(2, 14)):
-                    _emit_event("OUT", sid)
+                    _emit_event("OUT", sid, games, had_bonus and games <= RENCHAN_LIMIT)
                     time.sleep(0.02)
             time.sleep(0.2)
         _active_session = None
@@ -93,8 +109,11 @@ def sim_loop() -> None:
         time.sleep(2.5)
 
 
-def _emit_event(etype: str, sid: int) -> None:
-    broadcast("event", {"kind": "event", "type": etype, "ts": now_iso(), "session_id": sid})
+def _emit_event(etype: str, sid: int, games: int, zone: bool) -> None:
+    broadcast("event", {
+        "kind": "event", "type": etype, "ts": now_iso(), "session_id": sid,
+        "game_count": games, "in_renchan_zone": zone,
+    })
 
 
 class Handler(SimpleHTTPRequestHandler):
