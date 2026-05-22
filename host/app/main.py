@@ -75,7 +75,6 @@ def _build_settings_url(user_id: int, request: Request | None = None) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
-    game_counter.load_config()
     game_counter.seed_from_db()
     tasks = [
         asyncio.create_task(run_reader(SERIAL_PORT, SERIAL_BAUD)),

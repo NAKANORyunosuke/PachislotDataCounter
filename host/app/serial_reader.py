@@ -14,15 +14,26 @@ from .session_manager import session_manager
 logger = logging.getLogger(__name__)
 
 VALID_EVENTS = {"IN", "OUT", "RB", "BB"}
+VALID_EDGES = {"FALL", "RISE"}
 
 
-def parse_line(line: str) -> str | None:
-    token = line.strip().upper()
-    if not token:
+def parse_csv_line(line: str) -> tuple[int, str, str] | None:
+    """Pico の CSV 行 `timestamp_ms,game_id,event,edge,seq` を分解する.
+
+    (game_id, event, edge) を返す. `READY,...` ヘッダや壊れた行は None.
+    """
+    parts = line.strip().split(",")
+    if len(parts) != 5:
         return None
-    if token.startswith("EVENT:"):
-        token = token.split(":", 1)[1].strip()
-    return token if token in VALID_EVENTS else None
+    _ts, game_id, event, edge, _seq = parts
+    event = event.upper()
+    edge = edge.upper()
+    if event not in VALID_EVENTS or edge not in VALID_EDGES:
+        return None
+    try:
+        return int(game_id), event, edge
+    except ValueError:
+        return None
 
 
 async def run_reader(port: str, baud: int = 115200) -> None:
@@ -61,16 +72,25 @@ async def _read_loop(ser: serial.Serial) -> None:
         if not raw:
             continue
         line = raw.decode("utf-8", errors="replace")
-        event_type = parse_line(line)
-        if event_type is None:
+        parsed = parse_csv_line(line)
+        if parsed is None:
             logger.debug("Ignored line: %r", line)
             continue
-        ts_dt = datetime.now(timezone.utc)
-        ts = ts_dt.isoformat()
+        game_id, event_type, edge = parsed
+
+        # game_counter は FALL / RISE 両方を見て game_id とボーナス窓を追う.
+        info = game_counter.on_pico_event(event_type, edge, game_id)
+
+        # DB 記録・SSE 配信はイベント本体である FALL のみ. RISE はパルス終端 /
+        # ボーナス終了の通知で、game_counter の状態更新に使うだけ.
+        if edge != "FALL":
+            continue
+
+        ts = datetime.now(timezone.utc).isoformat()
         session_id = session_manager.active_session_id
         with get_connection() as conn:
             insert_event(conn, event_type, ts, session_id)
         payload = {"kind": "event", "type": event_type, "ts": ts, "session_id": session_id}
-        payload.update(game_counter.on_event(event_type, ts_dt))
-        print(f"[{ts}] {event_type} session={session_id}", flush=True)
+        payload.update(info)
+        print(f"[{ts}] {event_type} g{game_id} session={session_id}", flush=True)
         await broadcaster.publish(json.dumps(payload))

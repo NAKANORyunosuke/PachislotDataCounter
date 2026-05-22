@@ -1,62 +1,39 @@
 """直近ボーナスからのゲーム数を数える — 連チャン演出のための土台.
 
-ゲーム数の専用信号は無いため IN パルスから推定する. IN はレバーON 時に賭け枚数
-ぶんまとまって出る(リプレイの自動再ベットも IN を出す)一方、ゲーム間にはリール
-回転ぶんの間隔が空く. そこで IN パルスを時間ギャップ(IN_BURST_GAP_SEC)で区切り、
-1 かたまり = 1 ゲームとして数える. これで通常の 3 枚がけ / ジャグラーのペカリ後の
-1 枚がけ、さらにリプレイゲームも、賭け枚数・種別に依存せず数えられる.
+Pico は CSV 生ログで各イベントに「暫定 game_id」を付けて送ってくる
+(`pico/main.py` 参照). ホストはその game_id の変化で 1 ゲーム進んだと判断する
+ので、時間ギャップによるゲーム区切り推定は通常運転では不要.
+
+BB/RB はレベル信号で、Pico は FALL=ボーナス開始 / RISE=ボーナス終了 を送る.
+これでボーナス中の窓が正確に分かるため、ボーナス中のゲームは連チャンの
+ゲーム数に数えない(ボーナス当選で 0、ボーナス終了後の最初のゲームで 1).
 
 連チャン = 直近ボーナスから RENCHAN_LIMIT ゲーム以内の次のボーナス当選.
-
-ボーナス中もベットして IN が出るため、放っておくとボーナス中のゲームも数えて
-しまう. host/config.json の bonus_games(BB/RB 別のボーナス1回あたりゲーム数)を
-設定すると、ボーナス当選時にカウントを -bonus_games から始める. するとボーナス中は
-表示ゲーム数が 0、ボーナス終了あたりで 1 から数え直す(0 のままなら従来どおり
-ボーナス中も加算). 外部に見せる値は負値を 0 でクランプする.
 """
 from __future__ import annotations
 
-import json
 from datetime import datetime
-from pathlib import Path
 
 from .db import get_connection
 
-# 同一ゲームの賭けメダルはこの秒数以内に連続して入る. これより空いたら次ゲーム.
-IN_BURST_GAP_SEC = 2.5
 # 連チャン判定およびゾーン表示の上限ゲーム数.
 RENCHAN_LIMIT = 100
-
-CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
+# 再起動時の概算復元(seed_from_db)でのみ使う IN まとめ閾値(秒).
+# 通常運転は Pico の game_id を使うので、これは DB から概算する時専用.
+SEED_IN_GAP_SEC = 2.5
 
 
 class GameCounter:
     def __init__(self) -> None:
-        self._games = 0          # 直近ボーナスからのゲーム数(ボーナス中は負値)
-        self._total_games = 0    # 起動以降の累計ゲーム数(スランプグラフの X 軸用)
-        self._last_in_ts: datetime | None = None
+        self._game_count = 0          # 直近ボーナス(終了)からのゲーム数
+        self._total_games = 0         # 起動以降の累計ゲーム数(スランプグラフ X 軸)
+        self._last_game_id: int | None = None
+        self._in_bonus = False
         self._had_bonus = False
-        # ボーナス 1 回を何ゲームとみなしてカウントから差し引くか(BB/RB 別).
-        self._bonus_games = {"BB": 0, "RB": 0}
-
-    def load_config(self) -> None:
-        """host/config.json を読む. 無い / 壊れている場合は既定値のまま."""
-        try:
-            with open(CONFIG_PATH, encoding="utf-8") as f:
-                cfg = json.load(f)
-        except (OSError, ValueError):
-            return
-        bonus = cfg.get("bonus_games") if isinstance(cfg, dict) else None
-        if isinstance(bonus, dict):
-            for key in ("BB", "RB"):
-                try:
-                    self._bonus_games[key] = max(0, int(bonus.get(key, 0)))
-                except (TypeError, ValueError):
-                    pass
 
     @property
     def game_count(self) -> int:
-        return max(0, self._games)  # ボーナス中は負側にあるので 0 でクランプ
+        return self._game_count
 
     @property
     def total_games(self) -> int:
@@ -64,42 +41,51 @@ class GameCounter:
 
     @property
     def in_renchan_zone(self) -> bool:
-        return self._had_bonus and self.game_count <= RENCHAN_LIMIT
+        return self._had_bonus and self._game_count <= RENCHAN_LIMIT
 
     def _info(self) -> dict:
         return {
-            "game_count": self.game_count,
+            "game_count": self._game_count,
             "in_renchan_zone": self.in_renchan_zone,
             "total_games": self._total_games,
         }
 
-    def on_event(self, event_type: str, ts: datetime) -> dict:
-        """1 イベントぶん状態を更新し、SSE ペイロードに足すフィールドを返す."""
-        if event_type == "IN":
-            if (
-                self._last_in_ts is None
-                or (ts - self._last_in_ts).total_seconds() >= IN_BURST_GAP_SEC
-            ):
-                self._games += 1
-                self._total_games += 1
-            self._last_in_ts = ts
-        elif event_type in ("BB", "RB"):
-            won_at = self.game_count
-            renchan = self._had_bonus and won_at <= RENCHAN_LIMIT
-            self._games = -self._bonus_games.get(event_type, 0)
-            self._last_in_ts = None
-            self._had_bonus = True
-            return {**self._info(), "renchan": renchan, "win_game_count": won_at}
+    def on_pico_event(self, event: str, edge: str, game_id: int) -> dict:
+        """Pico の CSV 1 行ぶん状態を更新し、SSE ペイロードに足すフィールドを返す.
+
+        FALL / RISE 両方で呼ぶこと(game_id とボーナス窓の追跡に両方使う).
+        """
+        # game_id が変わったら 1 ゲーム進んだ. 起動後に最初に見た game_id は
+        # 進行中ゲームの可能性があるので基準として採用するだけでカウントしない.
+        if self._last_game_id is not None and game_id != self._last_game_id:
+            self._total_games += 1
+            # ボーナス中のゲームは連チャンのゲーム数には数えない.
+            if not self._in_bonus:
+                self._game_count += 1
+        self._last_game_id = game_id
+
+        if event in ("BB", "RB"):
+            if edge == "FALL":
+                won_at = self._game_count
+                renchan = self._had_bonus and won_at <= RENCHAN_LIMIT
+                self._game_count = 0
+                self._in_bonus = True
+                self._had_bonus = True
+                return {**self._info(), "renchan": renchan, "win_game_count": won_at}
+            # RISE: ボーナス終了. 以降の新ゲームから再びカウントされる.
+            self._in_bonus = False
         return self._info()
 
     def seed_from_db(self) -> None:
-        """保存済みイベントから状態を復元し、再起動でゲーム数が飛ばないようにする.
+        """再起動時に DB から状態を概算復元する.
 
-        load_config() の後に呼ぶこと(bonus_games を使うため).
+        DB には game_id を保存していないため、直近ボーナス以降の IN イベントを
+        時刻ギャップでまとめた概算(ボーナス中ぶんを含む). 次のボーナス当選で
+        正確な値に戻る.
         """
         with get_connection() as conn:
             last_bonus = conn.execute(
-                "SELECT id, type FROM events WHERE type IN ('BB','RB') "
+                "SELECT id FROM events WHERE type IN ('BB','RB') "
                 "ORDER BY id DESC LIMIT 1"
             ).fetchone()
             self._had_bonus = last_bonus is not None
@@ -108,17 +94,15 @@ class GameCounter:
                 "SELECT ts FROM events WHERE type = 'IN' AND id > ? ORDER BY id ASC",
                 (after_id,),
             ).fetchall()
-        bonus_type = last_bonus["type"] if last_bonus else None
-        games = -self._bonus_games.get(bonus_type, 0) if bonus_type else 0
+        games = 0
         last_ts: datetime | None = None
         for row in in_rows:
             ts = datetime.fromisoformat(row["ts"])
-            if last_ts is None or (ts - last_ts).total_seconds() >= IN_BURST_GAP_SEC:
+            if last_ts is None or (ts - last_ts).total_seconds() >= SEED_IN_GAP_SEC:
                 games += 1
             last_ts = ts
-        self._games = games
-        self._last_in_ts = last_ts
-        self._total_games = max(0, games)
+        self._game_count = games
+        self._total_games = games
 
 
 game_counter = GameCounter()
