@@ -97,14 +97,29 @@ def sim_loop() -> None:
                 })
                 games = 0
                 had_bonus = True
-                payout = random.randint(150, 330) if bonus == "BB" else random.randint(70, 120)
-                for _ in range(payout):
-                    _emit_event("OUT", sid, games, True, total)
-                    time.sleep(0.008)
+                # ボーナス中ゲーム: 各ゲーム 14 枚払い出し(連チャン数には入れない)
+                bonus_total = 0
+                for _ in range(random.randint(8, 16)):
+                    total += 1
+                    for _ in range(2):  # ボーナス中は 2 枚がけ
+                        _emit_event("IN", sid, 0, True, total)
+                        time.sleep(0.03)
+                    for _ in range(14):
+                        _emit_event("OUT", sid, 0, True, total)
+                        time.sleep(0.01)
+                    broadcast("event", {"kind": "payout", "medals": 14,
+                                        "game": total, "in_bonus": True})
+                    bonus_total += 14
+                    time.sleep(0.15)
+                broadcast("event", {"kind": "bonus_result", "bonus": bonus,
+                                    "medals": bonus_total})
             elif roll < 0.4:  # 小役払い出し
-                for _ in range(random.randint(2, 14)):
+                medals = random.randint(2, 14)
+                for _ in range(medals):
                     _emit_event("OUT", sid, games, had_bonus and games <= RENCHAN_LIMIT, total)
                     time.sleep(0.02)
+                broadcast("event", {"kind": "payout", "medals": medals,
+                                    "game": total, "in_bonus": False})
             time.sleep(0.2)
         _active_session = None
         broadcast("event", {"kind": "session_end", "session_id": sid, "ended_at": now_iso()})
