@@ -1,18 +1,33 @@
-# Pachislot external-output reader for Raspberry Pi Pico (MicroPython).
+# Pachislot external-output raw logger for Raspberry Pi Pico (MicroPython).
 #
-# Pachislot machines typically expose four dry-contact outputs that close
-# to GND when an event occurs. Connect each signal to a Pico GPIO and a
-# common GND. Internal pull-ups keep the pin HIGH while idle; a closure
-# pulls it LOW.
+# Pachislot machines expose four dry-contact outputs that close to GND when an
+# event occurs. Connect each signal to a Pico GPIO and a common GND. Internal
+# pull-ups keep a pin HIGH while idle; a contact closure pulls it LOW.
 #
-#   GP2  <- IN   (medal-in pulse)
+#   GP2  <- IN   (medal-in pulse: one pulse per bet medal at lever-on)
 #   GP3  <- OUT  (medal-out pulse)
-#   GP4  <- RB   (regular bonus)
-#   GP5  <- BB   (big bonus)
+#   GP4  <- RB   (regular bonus: held LOW for the whole bonus -- level signal)
+#   GP5  <- BB   (big bonus: held LOW for the whole bonus -- level signal)
 #   GND  <- common return
 #
-# On a HIGH->LOW edge (debounced), the pin's event name is printed to USB
-# serial, one per line. The Pi 5 host parses these via app/serial_reader.py.
+# This firmware emits a CSV raw log to USB serial, one event per line. Both the
+# FALL (HIGH->LOW) and RISE (LOW->HIGH) edges of every signal are reported, so
+# the Pi 5 host can reason about pulse width, chatter, stuck contacts and
+# bonus duration -- the Pico itself does not finalise game results.
+#
+# Boot header line (lets the host detect the format):
+#
+#   READY,format=v1,fields=timestamp_ms,game_id,event,edge,seq
+#
+# Event line:
+#
+#   timestamp_ms,game_id,event,edge,seq
+#
+#     timestamp_ms  ms since boot (time.ticks_ms())
+#     game_id       provisional game number assigned on the Pico (see below)
+#     event         IN / OUT / RB / BB
+#     edge          FALL (HIGH->LOW) or RISE (LOW->HIGH)
+#     seq           per-(game_id, event) running counter
 
 import time
 from machine import Pin
@@ -24,39 +39,68 @@ EVENTS = (
     ("BB", 5),
 )
 
-DEBOUNCE_MS = 20
+DEBOUNCE_MS = 20        # ignore further edges on the same pin within this window
+POLL_MS = 2             # loop pause; short enough not to miss contact pulses
+
+# A new game is recognised when an IN FALL arrives at least this long after the
+# previous IN FALL. The 3 closely-spaced IN pulses of a 3-medal bet stay in the
+# same game; the next lever-on (a longer gap away) starts the next game.
+IN_GROUP_GAP_MS = 300
 
 led = Pin("LED", Pin.OUT)
 
 pins = [(name, Pin(gp, Pin.IN, Pin.PULL_UP)) for name, gp in EVENTS]
 
+# Idle level is HIGH; remember it so the first real closure registers as FALL.
 state = {name: pin.value() for name, pin in pins}
-last_change = {name: 0 for name, _ in pins}
+last_edge_ms = {name: 0 for name, _ in pins}
 
-# イベント回数
-count = {name: 0 for name, _ in pins}
+# Provisional game numbering. game_id starts at 0 and becomes 1 on the first IN
+# FALL; events seen before any IN (e.g. a stray OUT) are emitted under game 0.
+game_id = 0
+last_in_fall_ms = 0
+have_in_fall = False
 
-print("READY")
+# seq is the per-(game_id, event) FALL counter. RISE reuses the FALL's value,
+# so seq is incremented on FALL only and all counters reset on a new game.
+seq = {name: 0 for name, _ in pins}
+
+print("READY,format=v1,fields=timestamp_ms,game_id,event,edge,seq")
 
 led.on()
 
 while True:
-    t = time.ticks_ms()
+    now = time.ticks_ms()
 
     for name, pin in pins:
-        v = pin.value()
+        level = pin.value()
+        if level == state[name]:
+            continue
+        if time.ticks_diff(now, last_edge_ms[name]) < DEBOUNCE_MS:
+            continue
 
-        # 状態変化 + デバウンス
-        if v != state[name] and time.ticks_diff(t, last_change[name]) >= DEBOUNCE_MS:
-            last_change[name] = t
-            state[name] = v
+        last_edge_ms[name] = now
+        state[name] = level
 
-            # HIGH -> LOW
-            if v == 0:
-                count[name] += 1
+        if level == 0:
+            # HIGH -> LOW: falling edge.
+            if name == "IN":
+                # First IN FALL ever, or one far enough from the previous IN
+                # FALL, opens a new game and resets every seq counter.
+                if not have_in_fall or \
+                        time.ticks_diff(now, last_in_fall_ms) >= IN_GROUP_GAP_MS:
+                    game_id += 1
+                    for ev in seq:
+                        seq[ev] = 0
+                have_in_fall = True
+                last_in_fall_ms = now
 
-                print("{} {}".format(name, count[name]))
+            seq[name] += 1
+            print("{},{},{},FALL,{}".format(now, game_id, name, seq[name]))
+        else:
+            # LOW -> HIGH: rising edge; reuse the matching FALL's seq value.
+            print("{},{},{},RISE,{}".format(now, game_id, name, seq[name]))
 
-                led.toggle()
+        led.toggle()
 
-    time.sleep_ms(2)
+    time.sleep_ms(POLL_MS)
