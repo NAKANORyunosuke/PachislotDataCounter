@@ -18,29 +18,45 @@ import time
 from machine import Pin
 
 EVENTS = (
-    ("IN",  2),
+    ("IN", 2),
     ("OUT", 3),
-    ("RB",  4),
-    ("BB",  5),
+    ("RB", 4),
+    ("BB", 5),
 )
+
 DEBOUNCE_MS = 20
 
 led = Pin("LED", Pin.OUT)
+
 pins = [(name, Pin(gp, Pin.IN, Pin.PULL_UP)) for name, gp in EVENTS]
+
 state = {name: pin.value() for name, pin in pins}
 last_change = {name: 0 for name, _ in pins}
 
+# イベント回数
+count = {name: 0 for name, _ in pins}
+
 print("READY")
+
 led.on()
 
 while True:
     t = time.ticks_ms()
+
     for name, pin in pins:
         v = pin.value()
+
+        # 状態変化 + デバウンス
         if v != state[name] and time.ticks_diff(t, last_change[name]) >= DEBOUNCE_MS:
             last_change[name] = t
             state[name] = v
+
+            # HIGH -> LOW
             if v == 0:
-                print(name)
+                count[name] += 1
+
+                print("{} {}".format(name, count[name]))
+
                 led.toggle()
+
     time.sleep_ms(2)
