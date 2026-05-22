@@ -246,7 +246,30 @@ function handleSessionEnd(payload) {
   applyDefaultLayout();
 }
 
-const BONUS_SUB = { BB: "BIG BONUS", RB: "REGULAR BONUS" };
+// 演出などの言葉遣いは host/static/labels.json で差し替えられる.
+// 取得失敗・キー欠落時は DEFAULT_LABELS にフォールバックする.
+const DEFAULT_LABELS = {
+  bb: "BB",
+  rb: "RB",
+  bbSub: "BIG BONUS",
+  rbSub: "REGULAR BONUS",
+  renchan: "連チャン!!",
+  renchanZone: "連チャンゾーン",
+  gameCount: "現在のゲーム数",
+};
+let labels = { ...DEFAULT_LABELS };
+
+async function loadLabels() {
+  try {
+    const res = await fetch("/labels.json", { cache: "no-store" });
+    if (res.ok) labels = { ...DEFAULT_LABELS, ...(await res.json()) };
+  } catch {
+    // 取得失敗時はデフォルトの言葉遣いのまま
+  }
+  document.getElementById("game-count-label").textContent = labels.gameCount;
+  document.getElementById("renchan-zone-label").textContent = labels.renchanZone;
+}
+
 let bonusTimer = null;
 
 function playBonus(type, renchan = false, winGames = null) {
@@ -257,10 +280,10 @@ function playBonus(type, renchan = false, winGames = null) {
   if (renchan) {
     html += `<div class="renchan-banner">${
       winGames != null ? `${winGames}G ` : ""
-    }連チャン!!</div>`;
+    }${labels.renchan}</div>`;
   }
-  html += `<div class="bonus-text">${type}</div>`;
-  html += `<div class="bonus-sub">${BONUS_SUB[type]}</div>`;
+  html += `<div class="bonus-text">${type === "BB" ? labels.bb : labels.rb}</div>`;
+  html += `<div class="bonus-sub">${type === "BB" ? labels.bbSub : labels.rbSub}</div>`;
   bonusOverlay.innerHTML = html;
   // クラス再付与だけではアニメーションが再生されないため reflow で強制リスタート
   void bonusOverlay.offsetWidth;
@@ -386,3 +409,4 @@ settingsToggles.addEventListener("change", () => {
 });
 
 applyDefaultLayout();
+loadLabels();
