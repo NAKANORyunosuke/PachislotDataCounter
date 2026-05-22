@@ -46,6 +46,8 @@ _clients: set[queue.Queue] = set()
 _clients_lock = threading.Lock()
 # 進行中セッションの session_start ペイロード. 途中接続のクライアントへ送り直す.
 _active_session: dict | None = None
+# 未登録カードのセッション中だけセットされる register_required ペイロード.
+_pending_register: dict | None = None
 
 
 def now_iso() -> str:
@@ -67,16 +69,27 @@ BONUS_RATE = 0.015
 
 def sim_loop() -> None:
     """擬似的なパチスロ稼働を延々と生成する (デーモンスレッド)."""
-    global _active_session
+    global _active_session, _pending_register
     sid = 0
     games = 0          # 直近ボーナスからのゲーム数(機械全体, セッションをまたぐ)
     total = 0          # 起動以降の累計ゲーム数(スランプグラフ X 軸用)
     had_bonus = False
     while True:
         sid += 1
+        # 3 セッションに 1 回、未登録カードを再現して登録 QR を出す.
+        if sid % 3 == 1:
+            _pending_register = {
+                "kind": "register_required", "user_id": 2, "token": "mocktoken",
+                "register_url": "/register?token=mocktoken",
+            }
+            broadcast("event", _pending_register)
+            user = {"id": 2, "name": None, "registered": False, "display_settings": {}}
+        else:
+            _pending_register = None
+            user = {**FAKE_USER, "display_settings": _user_settings.get(FAKE_USER["id"], {})}
         _active_session = {
             "kind": "session_start", "session_id": sid, "started_at": now_iso(),
-            "user": {**FAKE_USER, "display_settings": _user_settings.get(FAKE_USER["id"], {})},
+            "user": user,
         }
         broadcast("event", _active_session)
         for _ in range(random.randint(60, 160)):
@@ -122,6 +135,7 @@ def sim_loop() -> None:
                                     "game": total, "in_bonus": False})
             time.sleep(0.2)
         _active_session = None
+        _pending_register = None
         broadcast("event", {"kind": "session_end", "session_id": sid, "ended_at": now_iso()})
         time.sleep(2.5)
 
@@ -276,6 +290,10 @@ class Handler(SimpleHTTPRequestHandler):
             if _active_session is not None:
                 self.wfile.write(
                     f"event: event\ndata: {json.dumps(_active_session)}\n\n".encode()
+                )
+            if _pending_register is not None:
+                self.wfile.write(
+                    f"event: event\ndata: {json.dumps(_pending_register)}\n\n".encode()
                 )
             self.wfile.flush()
             while True:
