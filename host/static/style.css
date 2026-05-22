@@ -126,6 +126,9 @@ h2 { font-size: 1.1rem; margin: 0 0 0.75rem; opacity: 0.9; }
 .history th:nth-child(2), .history td:nth-child(2) {
   text-align: left;
 }
+.history tbody tr.clickable { cursor: pointer; }
+.history tbody tr.clickable:hover { background: #242424; }
+.history-payout-label { margin-top: 1rem; }
 
 .event-log {
   list-style: none;

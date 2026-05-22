@@ -13,6 +13,8 @@ const bonusOverlay = document.getElementById("bonus-overlay");
 const slumpChartPanel = document.getElementById("slump-chart-panel");
 const payoutChartPanel = document.getElementById("payout-panel");
 const bonusResultEl = document.getElementById("bonus-result");
+const historyDetailPanel = document.getElementById("history-detail-panel");
+const historyDetailTitle = document.getElementById("history-detail-title");
 const gameCountEl = document.getElementById("game-count");
 const renchanZoneEl = document.getElementById("renchan-zone");
 const renchanRemainingEl = document.getElementById("renchan-remaining");
@@ -31,6 +33,8 @@ let payoutChart = null;
 let payoutLabels = [];
 let payoutMedals = [];
 let payoutBaseGames = null;  // セッション最初の払い出しのゲーム(ラベル原点)
+let historySlumpChart = null;
+let historyPayoutChart = null;
 
 function renderTotals() {
   for (const k of KEYS) document.getElementById(k).textContent = totals[k];
@@ -78,9 +82,30 @@ function pushSlumpPoint() {
   renderSlumpChart();
 }
 
+// スランプグラフの軸範囲を slumpData から決める.
+//  - 横軸(ゲーム数): 100 から 100 刻みで、ゲームが進んだら拡張(青天井)
+//  - 縦軸(差枚): ±500 から 500 刻みで拡張. ただし下側は -1000 で打ち止め
+function slumpBounds(data) {
+  let maxX = 0;
+  let maxY = 0;
+  let minY = 0;
+  for (const p of data) {
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+    if (p.y < minY) minY = p.y;
+  }
+  const lower = Math.min(1000, Math.max(500, Math.ceil(-minY / 500) * 500));
+  return {
+    xMax: Math.max(100, Math.ceil(maxX / 100) * 100),
+    yMax: Math.max(500, Math.ceil(maxY / 500) * 500),
+    yMin: -lower,
+  };
+}
+
 function renderSlumpChart() {
   if (typeof Chart === "undefined") return;
   slumpChartPanel.classList.toggle("hidden", slumpData.length <= 1);
+  const bounds = slumpBounds(slumpData);
   if (!slumpChart) {
     const ctx = document.getElementById("slump-chart").getContext("2d");
     slumpChart = new Chart(ctx, {
@@ -91,8 +116,7 @@ function renderSlumpChart() {
             label: "差枚",
             data: slumpData,
             borderColor: "#ffca28",
-            backgroundColor: "rgba(255,202,40,0.12)",
-            fill: true,
+            fill: false,
             pointRadius: 0,
             borderWidth: 2,
             tension: 0,
@@ -106,16 +130,29 @@ function renderSlumpChart() {
         scales: {
           x: {
             type: "linear",
+            min: 0,
+            max: bounds.xMax,
             title: { display: true, text: "ゲーム数", color: "#aaa" },
-            ticks: { color: "#aaa" },
+            // ゲーム数は整数なので目盛りも整数だけにする(2.5 等を出さない).
+            ticks: { color: "#aaa", precision: 0 },
             grid: { color: "#2a2a2a" },
           },
-          y: { ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
+          y: {
+            min: bounds.yMin,
+            max: bounds.yMax,
+            ticks: { color: "#aaa", stepSize: 500 },
+            grid: {
+              color: (c) => (c.tick.value === 0 ? "#666" : "#2a2a2a"),
+            },
+          },
         },
       },
     });
   } else {
     slumpChart.data.datasets[0].data = slumpData;
+    slumpChart.options.scales.x.max = bounds.xMax;
+    slumpChart.options.scales.y.min = bounds.yMin;
+    slumpChart.options.scales.y.max = bounds.yMax;
     slumpChart.update("none");
   }
 }
@@ -221,6 +258,8 @@ function renderHistory(sessions) {
   body.innerHTML = "";
   for (const s of sessions) {
     const tr = document.createElement("tr");
+    tr.className = "clickable";
+    tr.addEventListener("click", () => loadSessionSeries(s));
     const diff = (s.out_count || 0) - (s.in_count || 0);
     tr.innerHTML = `
       <td>${fmtTs(s.started_at)}</td>
@@ -233,6 +272,88 @@ function renderHistory(sessions) {
     body.appendChild(tr);
   }
   historyPanel.classList.toggle("hidden", sessions.length === 0);
+}
+
+// --- 過去セッションのグラフ再描画(履歴の行クリックで表示)---------------
+async function loadSessionSeries(session) {
+  const res = await fetch(`/api/sessions/${session.id}/series`);
+  if (!res.ok) return;
+  const series = await res.json();
+  historyDetailTitle.textContent = `セッション詳細  ${fmtTs(session.started_at)}`;
+  renderHistorySlump(series.slump || []);
+  renderHistoryPayout(series.payout || []);
+  historyDetailPanel.classList.remove("hidden");
+}
+
+function renderHistorySlump(slump) {
+  if (typeof Chart === "undefined") return;
+  const b = slumpBounds(slump);
+  if (historySlumpChart) historySlumpChart.destroy();
+  const ctx = document.getElementById("history-slump-chart").getContext("2d");
+  historySlumpChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      datasets: [
+        {
+          label: "差枚",
+          data: slump,
+          borderColor: "#ffca28",
+          fill: false,
+          pointRadius: 0,
+          borderWidth: 2,
+          tension: 0,
+        },
+      ],
+    },
+    options: {
+      animation: false,
+      parsing: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          type: "linear",
+          min: 0,
+          max: b.xMax,
+          title: { display: true, text: "ゲーム数", color: "#aaa" },
+          ticks: { color: "#aaa", precision: 0 },
+          grid: { color: "#2a2a2a" },
+        },
+        y: {
+          min: b.yMin,
+          max: b.yMax,
+          ticks: { color: "#aaa", stepSize: 500 },
+          grid: { color: (c) => (c.tick.value === 0 ? "#666" : "#2a2a2a") },
+        },
+      },
+    },
+  });
+}
+
+function renderHistoryPayout(payout) {
+  if (typeof Chart === "undefined") return;
+  if (historyPayoutChart) historyPayoutChart.destroy();
+  const ctx = document.getElementById("history-payout-chart").getContext("2d");
+  historyPayoutChart = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: payout.map((p) => `${p.game}G`),
+      datasets: [
+        {
+          label: "払い出し",
+          data: payout.map((p) => p.medals),
+          backgroundColor: "rgba(102,187,106,0.75)",
+        },
+      ],
+    },
+    options: {
+      animation: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
+        y: { beginAtZero: true, ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
+      },
+    },
+  });
 }
 
 function renderChart(sessions) {

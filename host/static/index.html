@@ -109,12 +109,21 @@
 
     <section id="history-panel" class="panel hidden">
       <h2>セッション履歴</h2>
+      <p class="muted small">行をクリックすると差枚・払い出しグラフを表示</p>
       <table class="history">
         <thead>
           <tr><th>開始</th><th>終了</th><th>IN</th><th>OUT</th><th>BB</th><th>RB</th><th>差枚</th></tr>
         </thead>
         <tbody id="history-body"></tbody>
       </table>
+    </section>
+
+    <section id="history-detail-panel" class="panel hidden">
+      <h2 id="history-detail-title">セッション詳細</h2>
+      <div class="muted small">差枚スランプ</div>
+      <canvas id="history-slump-chart" height="180"></canvas>
+      <div class="muted small history-payout-label">払い出し</div>
+      <canvas id="history-payout-chart" height="180"></canvas>
     </section>
 
     <section id="event-log-panel" class="panel">

@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .db import (
+    build_session_series,
     complete_registration,
     count_by_type,
     count_by_type_for_user,
@@ -153,6 +154,16 @@ def session_detail(session_id: int) -> dict:
         "counts": counts,
         "events": events,
     }
+
+
+@app.get("/api/sessions/{session_id}/series")
+def session_series(session_id: int) -> dict:
+    """過去セッションのスランプ / 払い出しグラフを再描画するための系列データ."""
+    with get_connection() as conn:
+        if get_session(conn, session_id) is None:
+            raise HTTPException(status_code=404, detail="session not found")
+        events = events_for_session(conn, session_id)
+    return build_session_series(events)
 
 
 @app.get("/api/register/{token}")

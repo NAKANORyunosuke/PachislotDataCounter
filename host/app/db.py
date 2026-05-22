@@ -4,6 +4,8 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .payout_tracker import PAYOUT_GAP_MS
+
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "events.db"
 
 SCHEMA = """
@@ -11,7 +13,8 @@ CREATE TABLE IF NOT EXISTS events (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     ts         TEXT    NOT NULL,
     type       TEXT    NOT NULL,
-    session_id INTEGER REFERENCES sessions(id)
+    session_id INTEGER REFERENCES sessions(id),
+    game_id    INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_events_ts         ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_type       ON events(type);
@@ -45,6 +48,8 @@ LEGACY_MIGRATIONS = [
     ("events", "session_id", "ALTER TABLE events ADD COLUMN session_id INTEGER REFERENCES sessions(id)"),
     # Per-user display profile (JSON) added later.
     ("users", "display_settings", "ALTER TABLE users ADD COLUMN display_settings TEXT"),
+    # Pico の暫定 game_id. 過去セッションのグラフ再構成に使う.
+    ("events", "game_id", "ALTER TABLE events ADD COLUMN game_id INTEGER"),
 ]
 
 
@@ -95,11 +100,12 @@ def insert_event(
     event_type: str,
     ts: str | None = None,
     session_id: int | None = None,
+    game_id: int | None = None,
 ) -> int:
     ts = ts or _now_iso()
     cur = conn.execute(
-        "INSERT INTO events (ts, type, session_id) VALUES (?, ?, ?)",
-        (ts, event_type, session_id),
+        "INSERT INTO events (ts, type, session_id, game_id) VALUES (?, ?, ?, ?)",
+        (ts, event_type, session_id, game_id),
     )
     conn.commit()
     return cur.lastrowid
@@ -134,10 +140,60 @@ def count_by_type_for_user(conn: sqlite3.Connection, user_id: int) -> dict[str, 
 
 def events_for_session(conn: sqlite3.Connection, session_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, ts, type FROM events WHERE session_id = ? ORDER BY id ASC",
+        "SELECT id, ts, type, game_id FROM events WHERE session_id = ? ORDER BY id ASC",
         (session_id,),
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def _ts_to_ms(iso: str) -> float:
+    return datetime.fromisoformat(iso).timestamp() * 1000
+
+
+def build_session_series(events: list[dict]) -> dict:
+    """セッションの events から スランプ系列と払い出し系列を再構成する.
+
+    ゲーム境界は game_id の変化で判定し、ゲームごとに連番 (1..N) を振る.
+    スランプ系列 … 各ゲーム終了時点の累計差枚 (OUT-IN) の [{x,y}].
+    払い出し系列 … OUT を時刻ギャップ (PAYOUT_GAP_MS) で区切った 1 回ごとの
+                    払い出し [{game, medals}]. payout_tracker と同じ区切り方.
+    過去セッションのグラフ再描画用. 戻り値はフロントへそのまま渡せる形.
+    """
+    slump = [{"x": 0, "y": 0}]
+    payout: list[dict] = []
+    cum = 0
+    game_index = 0
+    last_gid = None
+    have_game = False
+    medals = 0
+    chunk_game = 0
+    last_out_ms: float | None = None
+    for ev in events:
+        gid = ev.get("game_id")
+        if not have_game or gid != last_gid:
+            if have_game:
+                slump.append({"x": game_index, "y": cum})
+            game_index += 1
+            last_gid = gid
+            have_game = True
+        etype = ev["type"]
+        if etype == "IN":
+            cum -= 1
+        elif etype == "OUT":
+            cum += 1
+            ms = _ts_to_ms(ev["ts"])
+            if medals and last_out_ms is not None and ms - last_out_ms > PAYOUT_GAP_MS:
+                payout.append({"game": chunk_game, "medals": medals})
+                medals = 0
+            if medals == 0:
+                chunk_game = game_index
+            medals += 1
+            last_out_ms = ms
+    if have_game:
+        slump.append({"x": game_index, "y": cum})
+    if medals:
+        payout.append({"game": chunk_game, "medals": medals})
+    return {"slump": slump, "payout": payout}
 
 
 # ---------------------------------------------------------------------------
