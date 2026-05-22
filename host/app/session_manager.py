@@ -58,6 +58,11 @@ class SessionManager:
                     logger.info(
                         "New card detected idm=%s user_id=%s", card_idm, user["id"]
                     )
+
+                # 未登録カードは、初回でも 2 回目以降でもタップのたびに登録 QR を出す.
+                # (未登録ユーザーは create_user_for_card で発行した
+                #  registration_token を登録完了まで保持している)
+                if not user["registered"]:
                     await broadcaster.publish(
                         json.dumps(
                             {
