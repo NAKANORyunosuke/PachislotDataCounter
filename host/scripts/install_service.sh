@@ -27,8 +27,9 @@ cp "$UNIT_SRC" "$UNIT_DST"
 echo "==> systemctl daemon-reload"
 systemctl daemon-reload
 
-echo "==> Enabling and starting pachislot-data-counter"
-systemctl enable --now pachislot-data-counter
+echo "==> Enabling (boot autostart) and (re)starting pachislot-data-counter"
+systemctl enable pachislot-data-counter
+systemctl restart pachislot-data-counter
 
 echo
 systemctl status pachislot-data-counter --no-pager || true

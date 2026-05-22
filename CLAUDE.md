@@ -151,10 +151,10 @@ sessions  (id, user_id, started_at, ended_at, end_reason)
 
 シェルスクリプト経由でセットアップ・起動できる. 詳細は `host/README.md`.
 
-- `setup_all.sh` … ホスト一括 (`setup_apt.sh` → `setup_python.sh` → `setup_nfc.sh`). systemd 登録は含まない
+- `setup_all.sh` … 一括セットアップ (`setup_apt.sh` → `setup_python.sh` → `setup_nfc.sh` → `install_service.sh` → Pico の `setup.sh`/`flash.sh`). systemd サービス登録(起動時に `run.sh` を自動起動)まで含む. Pico 未接続ならフラッシュはスキップして続行
 - `run.sh` … `host/.venv/bin/uvicorn` ラッパー. 起動時に `host/.env` を読む. `HOST` / `PORT` 環境変数で上書き可. stdout/stderr を `tee` で `run.log`(`LOG_FILE` で変更可)に追記する. `run.log` / `*.log` は `.gitignore` 済み
 - `test.sh` … 開発用モックサーバ(`host/scripts/mock_server.py`)起動ラッパー. 実機もバックエンドも不要で Web UI を確認できる
-- `host/scripts/install_service.sh` … systemd 登録 + `enable --now`. 自動起動は明示的に分離している
+- `host/scripts/install_service.sh` … systemd ユニットを設置し `enable`(起動時自動起動)+ `restart`. ユニットの `ExecStart` は `run.sh`
 - `pico/scripts/setup.sh` / `flash.sh` … mpremote 導入と Pico 書き込み. dev マシン or RPi5 のどちらでも実行可
 - `pico-edge-reader/scripts/setup.sh` / `flash.sh` … 汎用 Pico ファーム用. `pico/scripts/*` と同等で対象が `pico-edge-reader/main.py`
 

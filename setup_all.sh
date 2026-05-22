@@ -4,10 +4,8 @@
 #   1. apt deps                 (sudo)
 #   2. pyenv + Python + venv    (user)
 #   3. PaSoRi udev / blacklist  (sudo)
-#
-# systemd autostart is intentionally NOT run here — invoke
-# host/scripts/install_service.sh separately when you want the service enabled.
-# Pico-side setup is also separate; see pico/scripts/setup.sh.
+#   4. systemd service          (sudo)  -- boot autostart of run.sh
+#   5. Pico mpremote + flash            -- skipped if no Pico is connected
 #
 # Run from the project root:
 #   bash setup_all.sh
@@ -22,30 +20,42 @@ if [[ $EUID -eq 0 ]]; then
   exit 1
 fi
 
-echo "=== [1/3] apt packages (sudo) ==="
+echo "=== [1/5] apt packages (sudo) ==="
 sudo bash host/scripts/setup_apt.sh
 
 echo
-echo "=== [2/3] Python (pyenv + venv) ==="
+echo "=== [2/5] Python (pyenv + venv) ==="
 bash host/scripts/setup_python.sh
 
 echo
-echo "=== [3/3] PaSoRi (sudo) ==="
+echo "=== [3/5] PaSoRi (sudo) ==="
 sudo bash host/scripts/setup_nfc.sh
+
+echo
+echo "=== [4/5] systemd service (sudo) ==="
+sudo bash host/scripts/install_service.sh
+
+echo
+echo "=== [5/5] Pico firmware (mpremote + flash) ==="
+# Flash the Pico if it is plugged in; skip otherwise. A failing command
+# inside an 'if' condition is exempt from 'set -e', so setup is not aborted.
+if bash pico/scripts/setup.sh && bash pico/scripts/flash.sh; then
+  echo "Pico flashed."
+else
+  echo "Pico setup/flash skipped (Pico not connected?)."
+  echo "Plug in the Pico and run pico/scripts/setup.sh + flash.sh manually."
+fi
 
 cat <<'EOF'
 
-All host setup steps completed.
+All setup steps completed. The pachislot-data-counter service is enabled
+and starts run.sh at boot.
 
-To run the server:
-  bash run.sh                    # 0.0.0.0:8000
-  bash run.sh --reload           # dev auto-reload
-  HOST=127.0.0.1 PORT=8080 bash run.sh
+  systemctl status pachislot-data-counter      # check the service
+  journalctl -u pachislot-data-counter -f      # follow logs
+  bash run.sh                                  # or run manually (dev)
 
-To install as a systemd service:
-  sudo bash host/scripts/install_service.sh
-
-For the Pico side (run on whichever machine has the Pico plugged in):
+If the Pico was not connected during setup, flash it later:
   bash pico/scripts/setup.sh
   bash pico/scripts/flash.sh
 EOF
