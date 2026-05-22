@@ -23,7 +23,8 @@ let activeUserId = null;
 let chart = null;
 let slumpChart = null;
 let slumpData = [];
-let sessionStartMs = null;
+let slumpBaseGames = null;   // セッション開始時点の累計ゲーム数(X 軸の原点)
+let currentTotalGames = 0;   // バックエンドの total_games 最新値
 
 function renderTotals() {
   for (const k of KEYS) document.getElementById(k).textContent = totals[k];
@@ -55,17 +56,19 @@ function renderGameInfo(count, inZone) {
 }
 
 // --- 差枚スランプグラフ -------------------------------------------------
-// X 軸は暫定で「セッション開始からの経過時間(分)」。実機の信号仕様が確定し
-// ゲーム数を数えられるようになったら、pushSlumpPoint の x をゲーム数へ差し替える。
-function resetSlump(startedAt) {
-  sessionStartMs = startedAt ? new Date(startedAt).getTime() : Date.now();
+// X 軸はセッション内の累計ゲーム数(バックエンドの total_games の差分).
+function resetSlump() {
+  slumpBaseGames = null;
   slumpData = [{ x: 0, y: 0 }];
   renderSlumpChart();
 }
 
 function pushSlumpPoint() {
-  const x = sessionStartMs ? (Date.now() - sessionStartMs) / 60000 : 0;
-  slumpData.push({ x, y: sessionCounts.OUT - sessionCounts.IN });
+  if (slumpBaseGames === null) slumpBaseGames = currentTotalGames;
+  slumpData.push({
+    x: currentTotalGames - slumpBaseGames,
+    y: sessionCounts.OUT - sessionCounts.IN,
+  });
   renderSlumpChart();
 }
 
@@ -97,7 +100,7 @@ function renderSlumpChart() {
         scales: {
           x: {
             type: "linear",
-            title: { display: true, text: "経過時間 (分)", color: "#aaa" },
+            title: { display: true, text: "ゲーム数", color: "#aaa" },
             ticks: { color: "#aaa" },
             grid: { color: "#2a2a2a" },
           },
@@ -221,7 +224,7 @@ function handleSessionStart(payload) {
   activeSessionId = payload.session_id;
   resetSessionCounts();
   renderSessionCounts();
-  resetSlump(payload.started_at);
+  resetSlump();
   sessionPanel.classList.remove("hidden");
   const name = payload.user.name || "(未登録カード)";
   document.getElementById("session-user").textContent = name;
@@ -293,6 +296,7 @@ function playBonus(type, renchan = false, winGames = null) {
 }
 
 function handleEvent(payload) {
+  if ("total_games" in payload) currentTotalGames = payload.total_games;
   if (payload.type in totals) {
     totals[payload.type] += 1;
     renderTotals();
@@ -322,6 +326,7 @@ source.addEventListener("snapshot", (e) => {
   for (const k of KEYS) totals[k] = data[k] ?? 0;
   renderTotals();
   renderGameInfo(data.game_count ?? 0, data.in_renchan_zone ?? false);
+  currentTotalGames = data.total_games ?? 0;
   statusEl.textContent = "Connected";
 });
 

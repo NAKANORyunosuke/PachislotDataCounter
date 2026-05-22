@@ -70,6 +70,7 @@ def sim_loop() -> None:
     global _active_session
     sid = 0
     games = 0          # 直近ボーナスからのゲーム数(機械全体, セッションをまたぐ)
+    total = 0          # 起動以降の累計ゲーム数(スランプグラフ X 軸用)
     had_bonus = False
     while True:
         sid += 1
@@ -80,9 +81,10 @@ def sim_loop() -> None:
         broadcast("event", _active_session)
         for _ in range(random.randint(60, 160)):
             games += 1
+            total += 1
             zone = had_bonus and games <= RENCHAN_LIMIT
             for _ in range(3):  # 1 ゲーム = 3 枚投入
-                _emit_event("IN", sid, games, zone)
+                _emit_event("IN", sid, games, zone, total)
                 time.sleep(0.04)
             roll = random.random()
             if roll < BONUS_RATE:  # ボーナス当選
@@ -91,17 +93,17 @@ def sim_loop() -> None:
                     "kind": "event", "type": bonus, "ts": now_iso(), "session_id": sid,
                     "game_count": 0, "in_renchan_zone": True,
                     "renchan": had_bonus and games <= RENCHAN_LIMIT,
-                    "win_game_count": games,
+                    "win_game_count": games, "total_games": total,
                 })
                 games = 0
                 had_bonus = True
                 payout = random.randint(150, 330) if bonus == "BB" else random.randint(70, 120)
                 for _ in range(payout):
-                    _emit_event("OUT", sid, games, True)
+                    _emit_event("OUT", sid, games, True, total)
                     time.sleep(0.008)
             elif roll < 0.4:  # 小役払い出し
                 for _ in range(random.randint(2, 14)):
-                    _emit_event("OUT", sid, games, had_bonus and games <= RENCHAN_LIMIT)
+                    _emit_event("OUT", sid, games, had_bonus and games <= RENCHAN_LIMIT, total)
                     time.sleep(0.02)
             time.sleep(0.2)
         _active_session = None
@@ -109,10 +111,10 @@ def sim_loop() -> None:
         time.sleep(2.5)
 
 
-def _emit_event(etype: str, sid: int, games: int, zone: bool) -> None:
+def _emit_event(etype: str, sid: int, games: int, zone: bool, total: int) -> None:
     broadcast("event", {
         "kind": "event", "type": etype, "ts": now_iso(), "session_id": sid,
-        "game_count": games, "in_renchan_zone": zone,
+        "game_count": games, "in_renchan_zone": zone, "total_games": total,
     })
 
 

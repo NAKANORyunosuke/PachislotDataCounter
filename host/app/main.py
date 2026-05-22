@@ -48,6 +48,7 @@ def _snapshot() -> dict:
     snap: dict = {k: counts.get(k, 0) for k in EVENT_KEYS}
     snap["game_count"] = game_counter.game_count
     snap["in_renchan_zone"] = game_counter.in_renchan_zone
+    snap["total_games"] = game_counter.total_games
     return snap
 
 
@@ -74,6 +75,7 @@ def _build_settings_url(user_id: int, request: Request | None = None) -> str:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    game_counter.load_config()
     game_counter.seed_from_db()
     tasks = [
         asyncio.create_task(run_reader(SERIAL_PORT, SERIAL_BAUD)),
