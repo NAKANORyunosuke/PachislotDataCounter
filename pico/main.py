@@ -15,6 +15,9 @@
 # the Pi 5 host can reason about pulse width, chatter, stuck contacts and
 # bonus duration -- the Pico itself does not finalise game results.
 #
+# A RISE line carries the same game_id and seq as its matching FALL, so the host
+# can pair the two edges of a pulse even when a new game starts in between.
+#
 # Boot header line (lets the host detect the format):
 #
 #   READY,format=v1,fields=timestamp_ms,game_id,event,edge,seq
@@ -65,6 +68,11 @@ have_in_fall = False
 # so seq is incremented on FALL only and all counters reset on a new game.
 seq = {name: 0 for name, _ in pins}
 
+# Per-pin record of the game_id / seq used by the most recent FALL. RISE emits
+# these so a pulse stays pairable even if a new game intervenes (no reset here).
+fall_game_id = {name: 0 for name, _ in pins}
+fall_seq = {name: 0 for name, _ in pins}
+
 print("READY,format=v1,fields=timestamp_ms,game_id,event,edge,seq")
 
 led.on()
@@ -96,10 +104,13 @@ while True:
                 last_in_fall_ms = now
 
             seq[name] += 1
+            fall_game_id[name] = game_id
+            fall_seq[name] = seq[name]
             print("{},{},{},FALL,{}".format(now, game_id, name, seq[name]))
         else:
-            # LOW -> HIGH: rising edge; reuse the matching FALL's seq value.
-            print("{},{},{},RISE,{}".format(now, game_id, name, seq[name]))
+            # LOW -> HIGH: rising edge; reuse the matching FALL's game_id/seq.
+            print("{},{},{},RISE,{}".format(
+                now, fall_game_id[name], name, fall_seq[name]))
 
         led.toggle()
 
