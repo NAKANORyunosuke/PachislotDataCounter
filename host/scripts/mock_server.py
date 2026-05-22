@@ -148,24 +148,30 @@ def _emit_event(etype: str, sid: int, games: int, zone: bool, total: int) -> Non
 
 
 def _fake_series(sid: int) -> dict:
-    """過去セッションのスランプ / 払い出し系列を擬似生成(session_id で固定)."""
+    """過去セッションのスランプ / 払い出し / 当たり系列を擬似生成(sid で固定)."""
     rng = random.Random(sid)
     slump = [{"x": 0, "y": 0}]
     payout: list[dict] = []
+    hits: list[dict] = []
     cum = 0
+    since_bonus = 0
     for g in range(1, rng.randint(120, 350) + 1):
         cum -= 3  # 3 枚がけ
+        since_bonus += 1
         roll = rng.random()
         if roll < 0.025:  # ボーナス級
-            medals = rng.choice([96, 112, 240, 312])
+            bonus = rng.choice(["BB", "RB"])
+            medals = 240 if bonus == "BB" else 112
             cum += medals
             payout.append({"game": g, "medals": medals})
+            hits.append({"type": bonus, "game": since_bonus})
+            since_bonus = 0
         elif roll < 0.42:  # 小役
             medals = rng.randint(2, 15)
             cum += medals
             payout.append({"game": g, "medals": medals})
         slump.append({"x": g, "y": cum})
-    return {"slump": slump, "payout": payout}
+    return {"slump": slump, "payout": payout, "hits": hits}
 
 
 class Handler(SimpleHTTPRequestHandler):

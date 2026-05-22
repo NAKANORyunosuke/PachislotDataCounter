@@ -128,7 +128,26 @@ h2 { font-size: 1.1rem; margin: 0 0 0.75rem; opacity: 0.9; }
 }
 .history tbody tr.clickable { cursor: pointer; }
 .history tbody tr.clickable:hover { background: #242424; }
-.history-payout-label { margin-top: 1rem; }
+.history-hit-label { margin-top: 1rem; }
+
+/* 当たりまでのゲーム数リスト */
+.hit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 0.9rem;
+}
+.hit-list li {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.2rem 0;
+  border-bottom: 1px solid #2a2a2a;
+}
+.hit-list .type { font-weight: 700; }
+.hit-list .type.BB { color: #ef5350; }
+.hit-list .type.RB { color: #42a5f5; }
 
 .event-log {
   list-style: none;

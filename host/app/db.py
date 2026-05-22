@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS events (
     ts         TEXT    NOT NULL,
     type       TEXT    NOT NULL,
     session_id INTEGER REFERENCES sessions(id),
-    game_id    INTEGER
+    game_id    INTEGER,
+    win_game_count INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_events_ts         ON events(ts);
 CREATE INDEX IF NOT EXISTS idx_events_type       ON events(type);
@@ -50,6 +51,8 @@ LEGACY_MIGRATIONS = [
     ("users", "display_settings", "ALTER TABLE users ADD COLUMN display_settings TEXT"),
     # Pico の暫定 game_id. 過去セッションのグラフ再構成に使う.
     ("events", "game_id", "ALTER TABLE events ADD COLUMN game_id INTEGER"),
+    # BB/RB 行の当選時ゲーム数(当たりまでのゲーム数履歴の再構成用).
+    ("events", "win_game_count", "ALTER TABLE events ADD COLUMN win_game_count INTEGER"),
 ]
 
 
@@ -101,11 +104,13 @@ def insert_event(
     ts: str | None = None,
     session_id: int | None = None,
     game_id: int | None = None,
+    win_game_count: int | None = None,
 ) -> int:
     ts = ts or _now_iso()
     cur = conn.execute(
-        "INSERT INTO events (ts, type, session_id, game_id) VALUES (?, ?, ?, ?)",
-        (ts, event_type, session_id, game_id),
+        "INSERT INTO events (ts, type, session_id, game_id, win_game_count) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (ts, event_type, session_id, game_id, win_game_count),
     )
     conn.commit()
     return cur.lastrowid
@@ -140,7 +145,8 @@ def count_by_type_for_user(conn: sqlite3.Connection, user_id: int) -> dict[str, 
 
 def events_for_session(conn: sqlite3.Connection, session_id: int) -> list[dict]:
     rows = conn.execute(
-        "SELECT id, ts, type, game_id FROM events WHERE session_id = ? ORDER BY id ASC",
+        "SELECT id, ts, type, game_id, win_game_count FROM events "
+        "WHERE session_id = ? ORDER BY id ASC",
         (session_id,),
     ).fetchall()
     return [dict(row) for row in rows]
@@ -157,10 +163,12 @@ def build_session_series(events: list[dict]) -> dict:
     スランプ系列 … 各ゲーム終了時点の累計差枚 (OUT-IN) の [{x,y}].
     払い出し系列 … OUT を時刻ギャップ (PAYOUT_GAP_MS) で区切った 1 回ごとの
                     払い出し [{game, medals}]. payout_tracker と同じ区切り方.
+    当たり系列   … BB/RB 行に記録した当選時ゲーム数 [{type, game}].
     過去セッションのグラフ再描画用. 戻り値はフロントへそのまま渡せる形.
     """
     slump = [{"x": 0, "y": 0}]
     payout: list[dict] = []
+    hits: list[dict] = []
     cum = 0
     game_index = 0
     last_gid = None
@@ -189,11 +197,13 @@ def build_session_series(events: list[dict]) -> dict:
                 chunk_game = game_index
             medals += 1
             last_out_ms = ms
+        elif etype in ("BB", "RB"):
+            hits.append({"type": etype, "game": ev.get("win_game_count")})
     if have_game:
         slump.append({"x": game_index, "y": cum})
     if medals:
         payout.append({"game": chunk_game, "medals": medals})
-    return {"slump": slump, "payout": payout}
+    return {"slump": slump, "payout": payout, "hits": hits}
 
 
 # ---------------------------------------------------------------------------

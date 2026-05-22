@@ -13,8 +13,11 @@ const bonusOverlay = document.getElementById("bonus-overlay");
 const slumpChartPanel = document.getElementById("slump-chart-panel");
 const payoutChartPanel = document.getElementById("payout-panel");
 const bonusResultEl = document.getElementById("bonus-result");
+const hitHistoryPanel = document.getElementById("hit-history-panel");
+const hitListEl = document.getElementById("hit-list");
 const historyDetailPanel = document.getElementById("history-detail-panel");
 const historyDetailTitle = document.getElementById("history-detail-title");
+const historyHitListEl = document.getElementById("history-hit-list");
 const gameCountEl = document.getElementById("game-count");
 const renchanZoneEl = document.getElementById("renchan-zone");
 const renchanRemainingEl = document.getElementById("renchan-remaining");
@@ -34,7 +37,10 @@ let payoutLabels = [];
 let payoutMedals = [];
 let payoutBaseGames = null;  // セッション最初の払い出しのゲーム(ラベル原点)
 let historySlumpChart = null;
-let historyPayoutChart = null;
+let historyHitChart = null;
+// historyPayoutChart は廃止(過去セッション詳細は差枚 + 当たりG数)
+let hitChart = null;
+let hitGames = [];   // セッション中の当たりまでのゲーム数 [{type, game}]
 
 function renderTotals() {
   for (const k of KEYS) document.getElementById(k).textContent = totals[k];
@@ -214,6 +220,82 @@ function renderPayoutChart() {
   }
 }
 
+// --- 当たりまでのゲーム数(BB/RB ごとの当選ゲーム数)-----------------------
+function hitBarConfig(hits) {
+  return {
+    type: "bar",
+    data: {
+      labels: hits.map((_, i) => `${i + 1}`),
+      datasets: [
+        {
+          label: "当たりG数",
+          data: hits.map((h) => h.game),
+          backgroundColor: hits.map((h) =>
+            h.type === "BB" ? "#ef5350" : "#42a5f5"
+          ),
+        },
+      ],
+    },
+    options: {
+      animation: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
+        y: { beginAtZero: true, ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
+      },
+    },
+  };
+}
+
+function renderHitList(el, hits) {
+  el.innerHTML = "";
+  for (let i = hits.length - 1; i >= 0; i--) {  // 新しい当たりを上に
+    const li = document.createElement("li");
+    const ty = document.createElement("span");
+    ty.className = `type ${hits[i].type}`;
+    ty.textContent = hits[i].type;
+    const g = document.createElement("span");
+    g.textContent = `${hits[i].game} G`;
+    li.append(ty, g);
+    el.appendChild(li);
+  }
+}
+
+function resetHits() {
+  hitGames = [];
+  renderHitChart();
+}
+
+function addHit(type, games) {
+  hitGames.push({ type, game: games == null ? 0 : games });
+  renderHitChart();
+}
+
+function renderHitChart() {
+  hitHistoryPanel.classList.toggle("hidden", hitGames.length === 0);
+  renderHitList(hitListEl, hitGames);
+  if (typeof Chart === "undefined") return;
+  if (!hitChart) {
+    hitChart = new Chart(
+      document.getElementById("hit-chart").getContext("2d"),
+      hitBarConfig(hitGames)
+    );
+  } else {
+    hitChart.data = hitBarConfig(hitGames).data;
+    hitChart.update("none");
+  }
+}
+
+function renderHistoryHits(hits) {
+  renderHitList(historyHitListEl, hits);
+  if (typeof Chart === "undefined") return;
+  if (historyHitChart) historyHitChart.destroy();
+  historyHitChart = new Chart(
+    document.getElementById("history-hit-chart").getContext("2d"),
+    hitBarConfig(hits)
+  );
+}
+
 function fmtTs(iso) {
   if (!iso) return "-";
   const d = new Date(iso);
@@ -281,7 +363,7 @@ async function loadSessionSeries(session) {
   const series = await res.json();
   historyDetailTitle.textContent = `セッション詳細  ${fmtTs(session.started_at)}`;
   renderHistorySlump(series.slump || []);
-  renderHistoryPayout(series.payout || []);
+  renderHistoryHits(series.hits || []);
   historyDetailPanel.classList.remove("hidden");
 }
 
@@ -329,32 +411,6 @@ function renderHistorySlump(slump) {
   });
 }
 
-function renderHistoryPayout(payout) {
-  if (typeof Chart === "undefined") return;
-  if (historyPayoutChart) historyPayoutChart.destroy();
-  const ctx = document.getElementById("history-payout-chart").getContext("2d");
-  historyPayoutChart = new Chart(ctx, {
-    type: "bar",
-    data: {
-      labels: payout.map((p) => `${p.game}G`),
-      datasets: [
-        {
-          label: "払い出し",
-          data: payout.map((p) => p.medals),
-          backgroundColor: "rgba(102,187,106,0.75)",
-        },
-      ],
-    },
-    options: {
-      animation: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
-        y: { beginAtZero: true, ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
-      },
-    },
-  });
-}
 
 function renderChart(sessions) {
   if (!sessions.length || typeof Chart === "undefined") {
@@ -410,6 +466,7 @@ function handleSessionStart(payload) {
   renderSessionCounts();
   resetSlump();
   resetPayout();
+  resetHits();
   sessionPanel.classList.remove("hidden");
   const name = payload.user.name || "(未登録カード)";
   document.getElementById("session-user").textContent = name;
@@ -431,6 +488,7 @@ function handleSessionEnd(payload) {
   sessionPanel.classList.add("hidden");
   slumpChartPanel.classList.add("hidden");
   payoutChartPanel.classList.add("hidden");
+  hitHistoryPanel.classList.add("hidden");
   resetSessionCounts();
   applyDefaultLayout();
 }
@@ -501,6 +559,7 @@ function handleEvent(payload) {
   }
   if (payload.type === "BB" || payload.type === "RB") {
     playBonus(payload.type, payload.renchan, payload.win_game_count);
+    if (activeSessionId !== null) addHit(payload.type, payload.win_game_count);
   }
   appendEventLog(payload);
 }
@@ -565,11 +624,15 @@ const PANEL_IDS = [...settingsToggles.querySelectorAll("input[data-panel]")].map
   (i) => i.dataset.panel
 );
 
+// localStorage 未設定(初回)のときデフォルトで隠すパネル.
+const DEFAULT_HIDDEN = ["payout-panel"];
+
 function readDefaultHidden() {
   try {
-    return JSON.parse(localStorage.getItem(HIDDEN_PANELS_KEY)) || [];
+    const saved = JSON.parse(localStorage.getItem(HIDDEN_PANELS_KEY));
+    return Array.isArray(saved) ? saved : [...DEFAULT_HIDDEN];
   } catch {
-    return [];
+    return [...DEFAULT_HIDDEN];
   }
 }
 

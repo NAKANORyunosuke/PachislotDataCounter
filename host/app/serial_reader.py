@@ -104,7 +104,10 @@ async def _read_loop(ser: serial.Serial) -> None:
         ts = datetime.now(timezone.utc).isoformat()
         session_id = session_manager.active_session_id
         with get_connection() as conn:
-            insert_event(conn, event_type, ts, session_id, game_id)
+            insert_event(
+                conn, event_type, ts, session_id, game_id,
+                info.get("win_game_count"),
+            )
         payload = {"kind": "event", "type": event_type, "ts": ts, "session_id": session_id}
         payload.update(info)
         print(f"[{ts}] {event_type} g{game_id} session={session_id}", flush=True)

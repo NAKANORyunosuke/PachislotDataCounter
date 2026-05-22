@@ -17,7 +17,8 @@
         <label><input type="checkbox" data-panel="machine-panel" checked /> ゲーム数・連チャン</label>
         <label><input type="checkbox" data-panel="session-panel" checked /> 現在のセッション</label>
         <label><input type="checkbox" data-panel="slump-chart-panel" checked /> 差枚スランプグラフ</label>
-        <label><input type="checkbox" data-panel="payout-panel" checked /> 払い出し</label>
+        <label><input type="checkbox" data-panel="hit-history-panel" checked /> 当たりまでのゲーム数</label>
+        <label><input type="checkbox" data-panel="payout-panel" /> 払い出し</label>
         <label><input type="checkbox" data-panel="totals-panel" checked /> 累計</label>
         <label><input type="checkbox" data-panel="user-stats" checked /> ユーザー累計</label>
         <label><input type="checkbox" data-panel="session-chart-panel" checked /> セッション別 差枚推移</label>
@@ -69,6 +70,12 @@
       <canvas id="slump-chart" height="200"></canvas>
     </section>
 
+    <section id="hit-history-panel" class="panel hidden">
+      <h2>当たりまでのゲーム数</h2>
+      <canvas id="hit-chart" height="180"></canvas>
+      <ul id="hit-list" class="hit-list"></ul>
+    </section>
+
     <section id="payout-panel" class="panel hidden">
       <h2>払い出し</h2>
       <div id="bonus-result" class="muted small">-</div>
@@ -109,7 +116,7 @@
 
     <section id="history-panel" class="panel hidden">
       <h2>セッション履歴</h2>
-      <p class="muted small">行をクリックすると差枚・払い出しグラフを表示</p>
+      <p class="muted small">行をクリックすると差枚・当たりG数グラフを表示</p>
       <table class="history">
         <thead>
           <tr><th>開始</th><th>終了</th><th>IN</th><th>OUT</th><th>BB</th><th>RB</th><th>差枚</th></tr>
@@ -122,8 +129,9 @@
       <h2 id="history-detail-title">セッション詳細</h2>
       <div class="muted small">差枚スランプ</div>
       <canvas id="history-slump-chart" height="180"></canvas>
-      <div class="muted small history-payout-label">払い出し</div>
-      <canvas id="history-payout-chart" height="180"></canvas>
+      <div class="muted small history-hit-label">当たりまでのゲーム数</div>
+      <canvas id="history-hit-chart" height="180"></canvas>
+      <ul id="history-hit-list" class="hit-list"></ul>
     </section>
 
     <section id="event-log-panel" class="panel">
