@@ -53,16 +53,19 @@ class GameCounter:
     def on_pico_event(self, event: str, edge: str, game_id: int) -> dict:
         """Pico の CSV 1 行ぶん状態を更新し、SSE ペイロードに足すフィールドを返す.
 
-        FALL / RISE 両方で呼ぶこと(game_id とボーナス窓の追跡に両方使う).
+        FALL / RISE 両方で呼ぶこと(ボーナス窓の追跡に RISE も使う).
         """
-        # game_id が変わったら 1 ゲーム進んだ. 起動後に最初に見た game_id は
-        # 進行中ゲームの可能性があるので基準として採用するだけでカウントしない.
-        if self._last_game_id is not None and game_id != self._last_game_id:
-            self._total_games += 1
-            # ボーナス中のゲームは連チャンのゲーム数には数えない.
-            if not self._in_bonus:
-                self._game_count += 1
-        self._last_game_id = game_id
+        # 新ゲーム検出は FALL のみで行う. RISE は対応する FALL とペアになるよう
+        # Pico が FALL 時の game_id を載せてくる(ゲーム境界をまたいだ古い値も
+        # あり得る)ので、ゲーム数の進行には使わない. 起動後に最初に見た
+        # game_id は進行中ゲームの可能性があるので基準採用のみでカウントしない.
+        if edge == "FALL":
+            if self._last_game_id is not None and game_id != self._last_game_id:
+                self._total_games += 1
+                # ボーナス中のゲームは連チャンのゲーム数には数えない.
+                if not self._in_bonus:
+                    self._game_count += 1
+            self._last_game_id = game_id
 
         if event in ("BB", "RB"):
             if edge == "FALL":
