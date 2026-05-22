@@ -11,6 +11,8 @@ const chartPanel = document.getElementById("session-chart-panel");
 const eventLogEl = document.getElementById("event-log");
 const bonusOverlay = document.getElementById("bonus-overlay");
 const slumpChartPanel = document.getElementById("slump-chart-panel");
+const payoutChartPanel = document.getElementById("payout-panel");
+const bonusResultEl = document.getElementById("bonus-result");
 const gameCountEl = document.getElementById("game-count");
 const renchanZoneEl = document.getElementById("renchan-zone");
 const renchanRemainingEl = document.getElementById("renchan-remaining");
@@ -25,6 +27,10 @@ let slumpChart = null;
 let slumpData = [];
 let slumpBaseGames = null;   // セッション開始時点の累計ゲーム数(X 軸の原点)
 let currentTotalGames = 0;   // バックエンドの total_games 最新値
+let payoutChart = null;
+let payoutLabels = [];
+let payoutMedals = [];
+let payoutBaseGames = null;  // セッション最初の払い出しのゲーム(ラベル原点)
 
 function renderTotals() {
   for (const k of KEYS) document.getElementById(k).textContent = totals[k];
@@ -111,6 +117,63 @@ function renderSlumpChart() {
   } else {
     slumpChart.data.datasets[0].data = slumpData;
     slumpChart.update("none");
+  }
+}
+
+// --- 払い出し(1ゲームごとの払い出し枚数とボーナス合計)-----------------
+function resetPayout() {
+  payoutLabels = [];
+  payoutMedals = [];
+  payoutBaseGames = null;
+  bonusResultEl.textContent = "-";
+  renderPayoutChart();
+}
+
+function addPayout(payload) {
+  if (payoutBaseGames === null) payoutBaseGames = payload.game;
+  payoutLabels.push(`${payload.game - payoutBaseGames + 1}G`);
+  payoutMedals.push(payload.medals);
+  renderPayoutChart();
+}
+
+function showBonusResult(payload) {
+  bonusResultEl.textContent = `直近ボーナス: ${payload.bonus} ${payload.medals} 枚`;
+}
+
+function renderPayoutChart() {
+  if (typeof Chart === "undefined") return;
+  payoutChartPanel.classList.toggle("hidden", payoutMedals.length === 0);
+  if (!payoutChart) {
+    const ctx = document.getElementById("payout-chart").getContext("2d");
+    payoutChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: payoutLabels,
+        datasets: [
+          {
+            label: "払い出し",
+            data: payoutMedals,
+            backgroundColor: "rgba(102,187,106,0.75)",
+          },
+        ],
+      },
+      options: {
+        animation: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
+          y: {
+            beginAtZero: true,
+            ticks: { color: "#aaa" },
+            grid: { color: "#2a2a2a" },
+          },
+        },
+      },
+    });
+  } else {
+    payoutChart.data.labels = payoutLabels;
+    payoutChart.data.datasets[0].data = payoutMedals;
+    payoutChart.update("none");
   }
 }
 
@@ -225,6 +288,7 @@ function handleSessionStart(payload) {
   resetSessionCounts();
   renderSessionCounts();
   resetSlump();
+  resetPayout();
   sessionPanel.classList.remove("hidden");
   const name = payload.user.name || "(未登録カード)";
   document.getElementById("session-user").textContent = name;
@@ -245,6 +309,7 @@ function handleSessionEnd(payload) {
   activeSessionId = null;
   sessionPanel.classList.add("hidden");
   slumpChartPanel.classList.add("hidden");
+  payoutChartPanel.classList.add("hidden");
   resetSessionCounts();
   applyDefaultLayout();
 }
@@ -354,6 +419,12 @@ source.addEventListener("event", (e) => {
       break;
     case "settings_updated":
       if (msg.user_id === activeUserId) applyUserProfile(msg.display_settings);
+      break;
+    case "payout":
+      if (activeSessionId !== null) addPayout(msg);
+      break;
+    case "bonus_result":
+      if (activeSessionId !== null) showBonusResult(msg);
       break;
   }
 });

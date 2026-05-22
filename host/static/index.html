@@ -17,6 +17,7 @@
         <label><input type="checkbox" data-panel="machine-panel" checked /> ゲーム数・連チャン</label>
         <label><input type="checkbox" data-panel="session-panel" checked /> 現在のセッション</label>
         <label><input type="checkbox" data-panel="slump-chart-panel" checked /> 差枚スランプグラフ</label>
+        <label><input type="checkbox" data-panel="payout-panel" checked /> 払い出し</label>
         <label><input type="checkbox" data-panel="totals-panel" checked /> 累計</label>
         <label><input type="checkbox" data-panel="user-stats" checked /> ユーザー累計</label>
         <label><input type="checkbox" data-panel="session-chart-panel" checked /> セッション別 差枚推移</label>
@@ -66,6 +67,12 @@
     <section id="slump-chart-panel" class="panel hidden">
       <h2>差枚スランプグラフ</h2>
       <canvas id="slump-chart" height="200"></canvas>
+    </section>
+
+    <section id="payout-panel" class="panel hidden">
+      <h2>払い出し</h2>
+      <div id="bonus-result" class="muted small">-</div>
+      <canvas id="payout-chart" height="200"></canvas>
     </section>
 
     <section id="register-panel" class="panel hidden">

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 from datetime import datetime, timezone
 
 import serial
@@ -9,6 +10,7 @@ from serial.serialutil import SerialException
 from .db import get_connection, insert_event
 from .events import broadcaster
 from .game_counter import game_counter
+from .payout_tracker import payout_tracker
 from .session_manager import session_manager
 
 logger = logging.getLogger(__name__)
@@ -17,21 +19,21 @@ VALID_EVENTS = {"IN", "OUT", "RB", "BB"}
 VALID_EDGES = {"FALL", "RISE"}
 
 
-def parse_csv_line(line: str) -> tuple[int, str, str] | None:
+def parse_csv_line(line: str) -> tuple[int, int, str, str] | None:
     """Pico の CSV 行 `timestamp_ms,game_id,event,edge,seq` を分解する.
 
-    (game_id, event, edge) を返す. `READY,...` ヘッダや壊れた行は None.
+    (timestamp_ms, game_id, event, edge) を返す. `READY,...` ヘッダや壊れた行は None.
     """
     parts = line.strip().split(",")
     if len(parts) != 5:
         return None
-    _ts, game_id, event, edge, _seq = parts
+    ts_ms, game_id, event, edge, _seq = parts
     event = event.upper()
     edge = edge.upper()
     if event not in VALID_EVENTS or edge not in VALID_EDGES:
         return None
     try:
-        return int(game_id), event, edge
+        return int(ts_ms), int(game_id), event, edge
     except ValueError:
         return None
 
@@ -65,10 +67,17 @@ async def run_reader(port: str, baud: int = 115200) -> None:
         await asyncio.sleep(1)
 
 
+async def _publish(messages: list[dict]) -> None:
+    for msg in messages:
+        await broadcaster.publish(json.dumps(msg))
+
+
 async def _read_loop(ser: serial.Serial) -> None:
     loop = asyncio.get_running_loop()
     while True:
         raw = await loop.run_in_executor(None, ser.readline)
+        # 空読みのたびにも呼ぶ: OUT が途切れて確定した払い出しを配信する.
+        await _publish(payout_tracker.tick(time.monotonic()))
         if not raw:
             continue
         line = raw.decode("utf-8", errors="replace")
@@ -76,13 +85,19 @@ async def _read_loop(ser: serial.Serial) -> None:
         if parsed is None:
             logger.debug("Ignored line: %r", line)
             continue
-        game_id, event_type, edge = parsed
+        ts_ms, game_id, event_type, edge = parsed
 
         # game_counter は FALL / RISE 両方を見て game_id とボーナス窓を追う.
         info = game_counter.on_pico_event(event_type, edge, game_id)
+        # payout_tracker は OUT を払い出し単位に区切り、ボーナス合計も出す.
+        await _publish(
+            payout_tracker.feed(
+                event_type, edge, ts_ms, time.monotonic(), info["total_games"]
+            )
+        )
 
-        # DB 記録・SSE 配信はイベント本体である FALL のみ. RISE はパルス終端 /
-        # ボーナス終了の通知で、game_counter の状態更新に使うだけ.
+        # DB 記録・event SSE はイベント本体である FALL のみ. RISE はパルス終端 /
+        # ボーナス終了の通知で、game_counter / payout_tracker が状態更新に使う.
         if edge != "FALL":
             continue
 
