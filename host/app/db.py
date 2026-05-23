@@ -206,6 +206,34 @@ def build_session_series(events: list[dict]) -> dict:
     return {"slump": slump, "payout": payout, "hits": hits}
 
 
+def window_counts(conn: sqlite3.Connection, since_iso: str) -> dict:
+    """since_iso 以降の events を集計し BB/RB/IN/OUT 数と回転数(ゲーム数)を返す.
+
+    回転数は game_id が切り替わった回数(= ゲームの数). 確率メトリクスの分母用.
+    """
+    rows = conn.execute(
+        "SELECT type, COUNT(*) AS n FROM events WHERE ts >= ? GROUP BY type",
+        (since_iso,),
+    ).fetchall()
+    counts = {row["type"]: row["n"] for row in rows}
+    games = conn.execute(
+        """
+        SELECT COUNT(*) AS n FROM (
+            SELECT game_id, LAG(game_id) OVER (ORDER BY id) AS prev
+            FROM events WHERE ts >= ?
+        ) WHERE game_id IS NOT prev
+        """,
+        (since_iso,),
+    ).fetchone()["n"]
+    return {
+        "BB": counts.get("BB", 0),
+        "RB": counts.get("RB", 0),
+        "IN": counts.get("IN", 0),
+        "OUT": counts.get("OUT", 0),
+        "games": games,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Users
 # ---------------------------------------------------------------------------

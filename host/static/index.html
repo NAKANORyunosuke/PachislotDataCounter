@@ -24,6 +24,13 @@
         <label><input type="checkbox" data-panel="session-chart-panel" checked /> セッション別 差枚推移</label>
         <label><input type="checkbox" data-panel="history-panel" checked /> セッション履歴</label>
         <label><input type="checkbox" data-panel="event-log-panel" checked /> イベントログ</label>
+        <label><input type="checkbox" data-panel="m-s-bb" /> セッション: BB回数</label>
+        <label><input type="checkbox" data-panel="m-s-rb" /> セッション: RB回数</label>
+        <label><input type="checkbox" data-panel="m-s-in" /> セッション: IN</label>
+        <label><input type="checkbox" data-panel="m-s-out" /> セッション: OUT</label>
+        <label><input type="checkbox" data-panel="m-s-pbb" checked /> セッション: BB確率</label>
+        <label><input type="checkbox" data-panel="m-s-prb" checked /> セッション: RB確率</label>
+        <label><input type="checkbox" data-panel="m-s-pall" checked /> セッション: 合成確率</label>
       </div>
     </details>
 
@@ -47,11 +54,19 @@
         </div>
         <button id="session-end-hint" class="hint">同じカード再タップで終了</button>
       </header>
+      <div class="scope-select" id="scope-select">
+        <button type="button" data-scope="session">セッション</button>
+        <button type="button" data-scope="today">当日</button>
+        <button type="button" data-scope="boot">電源後</button>
+      </div>
       <div class="grid">
-        <div class="card big"><div class="label">BB</div><div class="value" id="s-BB">0</div></div>
-        <div class="card reg"><div class="label">RB</div><div class="value" id="s-RB">0</div></div>
-        <div class="card in"><div class="label">IN</div><div class="value" id="s-IN">0</div></div>
-        <div class="card out"><div class="label">OUT</div><div class="value" id="s-OUT">0</div></div>
+        <div class="card big" id="m-s-bb"><div class="label">BB</div><div class="value" id="s-BB">0</div></div>
+        <div class="card reg" id="m-s-rb"><div class="label">RB</div><div class="value" id="s-RB">0</div></div>
+        <div class="card in" id="m-s-in"><div class="label">IN</div><div class="value" id="s-IN">0</div></div>
+        <div class="card out" id="m-s-out"><div class="label">OUT</div><div class="value" id="s-OUT">0</div></div>
+        <div class="card prob" id="m-s-pbb"><div class="label">BB確率</div><div class="value" id="s-pbb">—</div></div>
+        <div class="card prob" id="m-s-prb"><div class="label">RB確率</div><div class="value" id="s-prb">—</div></div>
+        <div class="card prob" id="m-s-pall"><div class="label">合成</div><div class="value" id="s-pall">—</div></div>
       </div>
       <div class="diff-row">
         <div class="muted">差枚</div>

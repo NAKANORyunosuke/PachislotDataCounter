@@ -4,7 +4,11 @@ import json
 import logging
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
+
+# サーバ起動時刻(「電源再投入後」スコープの起点).
+SERVER_START = datetime.now(timezone.utc)
 
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
@@ -24,6 +28,7 @@ from .db import (
     init_db,
     sessions_for_user,
     set_display_settings,
+    window_counts,
 )
 from .events import broadcaster
 from .game_counter import game_counter
@@ -101,6 +106,22 @@ app = FastAPI(lifespan=lifespan)
 @app.get("/api/counts")
 def get_counts() -> dict:
     return _snapshot()
+
+
+def _today_start_iso() -> str:
+    """ローカル日付 0 時を UTC ISO で返す(events.ts と比較するため)."""
+    local_now = datetime.now().astimezone()
+    midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return midnight.astimezone(timezone.utc).isoformat()
+
+
+@app.get("/api/stats")
+def get_stats() -> dict:
+    """確率メトリクス用の時間窓集計: 当日 / サーバ起動後 の BB/RB/IN/OUT/回転数."""
+    with get_connection() as conn:
+        today = window_counts(conn, _today_start_iso())
+        boot = window_counts(conn, SERVER_START.isoformat())
+    return {"today": today, "boot": boot}
 
 
 @app.get("/api/events/stream")

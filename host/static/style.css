@@ -17,8 +17,35 @@ h2 { font-size: 1.1rem; margin: 0 0 0.75rem; opacity: 0.9; }
   margin-bottom: 1rem;
 }
 .panel.hidden { display: none; }
-/* 表示設定でユーザーがオフにしたパネル. .hidden(データ都合の非表示)とは独立 */
+/* 表示設定でユーザーがオフにしたパネル / カード. .hidden とは独立 */
 .panel.user-off { display: none; }
+.card.user-off { display: none; }
+
+/* 確率メトリクス用カード(神経質に色を主張しない控えめな配色) */
+.card.prob { background: #2e2e2e; }
+.card.prob .value { font-size: 1.6rem; }
+
+/* スコープセレクタ(セッション中 / 当日 / 電源後) */
+.scope-select {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+.scope-select button {
+  flex: 1;
+  background: #2a2a2a;
+  color: #ddd;
+  border: 1px solid #3a3a3a;
+  border-radius: 8px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.scope-select button.active {
+  background: #1565c0;
+  border-color: #1976d2;
+  color: #fff;
+}
 
 #settings-panel summary,
 .settings-qr summary {

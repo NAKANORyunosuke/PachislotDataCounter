@@ -48,6 +48,8 @@ _clients_lock = threading.Lock()
 _active_session: dict | None = None
 # 未登録カードのセッション中だけセットされる register_required ペイロード.
 _pending_register: dict | None = None
+# /api/stats 用. mock 起動以降の累計(BB/RB/IN/OUT 数とゲーム数).
+_stats = {"BB": 0, "RB": 0, "IN": 0, "OUT": 0, "games": 0}
 
 
 def now_iso() -> str:
@@ -95,6 +97,7 @@ def sim_loop() -> None:
         for _ in range(random.randint(60, 160)):
             games += 1
             total += 1
+            _stats["games"] += 1
             zone = had_bonus and games <= RENCHAN_LIMIT
             for _ in range(3):  # 1 ゲーム = 3 枚投入
                 _emit_event("IN", sid, games, zone, total)
@@ -102,6 +105,7 @@ def sim_loop() -> None:
             roll = random.random()
             if roll < BONUS_RATE:  # ボーナス当選
                 bonus = random.choice(["BB", "RB"])
+                _stats[bonus] += 1
                 broadcast("event", {
                     "kind": "event", "type": bonus, "ts": now_iso(), "session_id": sid,
                     "game_count": 0, "in_renchan_zone": True,
@@ -114,6 +118,7 @@ def sim_loop() -> None:
                 bonus_total = 0
                 for _ in range(random.randint(8, 16)):
                     total += 1
+                    _stats["games"] += 1
                     for _ in range(2):  # ボーナス中は 2 枚がけ
                         _emit_event("IN", sid, 0, True, total)
                         time.sleep(0.03)
@@ -141,6 +146,7 @@ def sim_loop() -> None:
 
 
 def _emit_event(etype: str, sid: int, games: int, zone: bool, total: int) -> None:
+    _stats[etype] += 1
     broadcast("event", {
         "kind": "event", "type": etype, "ts": now_iso(), "session_id": sid,
         "game_count": games, "in_renchan_zone": zone, "total_games": total,
@@ -208,6 +214,9 @@ class Handler(SimpleHTTPRequestHandler):
             except (IndexError, ValueError):
                 sid = 0
             self._json(_fake_series(sid))
+        elif path == "/api/stats":
+            # 当日 = boot と同じ値を返す(mock は「以前の今日」を持たない).
+            self._json({"today": dict(_stats), "boot": dict(_stats)})
         elif path == "/api/counts":
             self._json({"IN": 0, "OUT": 0, "BB": 0, "RB": 0})
         else:

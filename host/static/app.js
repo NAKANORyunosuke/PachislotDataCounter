@@ -18,6 +18,12 @@ const hitListEl = document.getElementById("hit-list");
 const historyDetailPanel = document.getElementById("history-detail-panel");
 const historyDetailTitle = document.getElementById("history-detail-title");
 const historyHitListEl = document.getElementById("history-hit-list");
+const scopeSelectEl = document.getElementById("scope-select");
+const probEls = {
+  BB: document.getElementById("s-pbb"),
+  RB: document.getElementById("s-prb"),
+  ALL: document.getElementById("s-pall"),
+};
 const gameCountEl = document.getElementById("game-count");
 const renchanZoneEl = document.getElementById("renchan-zone");
 const renchanRemainingEl = document.getElementById("renchan-remaining");
@@ -41,6 +47,12 @@ let historyHitChart = null;
 // historyPayoutChart は廃止(過去セッション詳細は差枚 + 当たりG数)
 let hitChart = null;
 let hitGames = [];   // セッション中の当たりまでのゲーム数 [{type, game}]
+// 確率メトリクス用. スコープ別カウント(分母の回転数 + BB/RB).
+const PROB_SCOPE_KEY = "pdc-prob-scope";
+let probScope = localStorage.getItem(PROB_SCOPE_KEY) || "session";
+let sessionGameBase = 0;     // セッション開始時点の total_games
+let todayStats = { BB: 0, RB: 0, games: 0 };
+let bootStats = { BB: 0, RB: 0, games: 0 };
 
 function renderTotals() {
   for (const k of KEYS) document.getElementById(k).textContent = totals[k];
@@ -286,6 +298,59 @@ function renderHitChart() {
   }
 }
 
+// --- 確率メトリクス(BB/RB/合成 を 1/N 表記、スコープ session/today/boot) -----
+function fmtProb(games, count) {
+  if (!games || !count) return "—";
+  return `1/${(games / count).toFixed(1)}`;
+}
+
+function renderProbabilities() {
+  let bb;
+  let rb;
+  let games;
+  if (probScope === "session") {
+    bb = sessionCounts.BB;
+    rb = sessionCounts.RB;
+    games = Math.max(0, currentTotalGames - sessionGameBase);
+  } else if (probScope === "today") {
+    bb = todayStats.BB;
+    rb = todayStats.RB;
+    games = todayStats.games;
+  } else {
+    bb = bootStats.BB;
+    rb = bootStats.RB;
+    games = bootStats.games;
+  }
+  probEls.BB.textContent = fmtProb(games, bb);
+  probEls.RB.textContent = fmtProb(games, rb);
+  probEls.ALL.textContent = fmtProb(games, bb + rb);
+}
+
+async function fetchStats() {
+  try {
+    const res = await fetch("/api/stats", { cache: "no-store" });
+    if (!res.ok) return;
+    const d = await res.json();
+    if (d.today) todayStats = d.today;
+    if (d.boot) bootStats = d.boot;
+    renderProbabilities();
+  } catch {
+    // ネットワーク失敗時はスキップして次のポーリングに任せる
+  }
+}
+
+function setScope(scope) {
+  if (!["session", "today", "boot"].includes(scope)) return;
+  probScope = scope;
+  localStorage.setItem(PROB_SCOPE_KEY, scope);
+  if (scopeSelectEl) {
+    for (const btn of scopeSelectEl.querySelectorAll("button[data-scope]")) {
+      btn.classList.toggle("active", btn.dataset.scope === scope);
+    }
+  }
+  renderProbabilities();
+}
+
 function renderHistoryHits(hits) {
   renderHitList(historyHitListEl, hits);
   if (typeof Chart === "undefined") return;
@@ -467,6 +532,8 @@ function handleSessionStart(payload) {
   resetSlump();
   resetPayout();
   resetHits();
+  sessionGameBase = currentTotalGames;  // 確率「セッション中」スコープの分母原点
+  renderProbabilities();
   sessionPanel.classList.remove("hidden");
   const name = payload.user.name || "(未登録カード)";
   document.getElementById("session-user").textContent = name;
@@ -553,6 +620,7 @@ function handleEvent(payload) {
     sessionCounts[payload.type] += 1;
     renderSessionCounts();
     if (payload.type === "IN" || payload.type === "OUT") pushSlumpPoint();
+    renderProbabilities();   // セッションスコープなら毎イベントで更新
   }
   if ("game_count" in payload) {
     renderGameInfo(payload.game_count, payload.in_renchan_zone);
@@ -572,6 +640,7 @@ source.addEventListener("snapshot", (e) => {
   renderTotals();
   renderGameInfo(data.game_count ?? 0, data.in_renchan_zone ?? false);
   currentTotalGames = data.total_games ?? 0;
+  renderProbabilities();
   statusEl.textContent = "Connected";
 });
 
@@ -624,8 +693,15 @@ const PANEL_IDS = [...settingsToggles.querySelectorAll("input[data-panel]")].map
   (i) => i.dataset.panel
 );
 
-// localStorage 未設定(初回)のときデフォルトで隠すパネル.
-const DEFAULT_HIDDEN = ["payout-panel"];
+// localStorage 未設定(初回)のときデフォルトで隠すパネル / カード.
+// セッションパネルの BB/RB/IN/OUT カウントは規定で非表示、確率カードは表示.
+const DEFAULT_HIDDEN = [
+  "payout-panel",
+  "m-s-bb",
+  "m-s-rb",
+  "m-s-in",
+  "m-s-out",
+];
 
 function readDefaultHidden() {
   try {
@@ -670,3 +746,14 @@ settingsToggles.addEventListener("change", () => {
 
 applyDefaultLayout();
 loadLabels();
+
+// 確率スコープのセレクタ + /api/stats のポーリング.
+if (scopeSelectEl) {
+  scopeSelectEl.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-scope]");
+    if (btn) setScope(btn.dataset.scope);
+  });
+}
+setScope(probScope);     // localStorage の永続値を反映してハイライト
+fetchStats();
+setInterval(fetchStats, 5000);

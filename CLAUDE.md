@@ -99,6 +99,16 @@ Pico の暫定 game_id は次ゲームのレバーオンで切られるため、
 ### 過去セッションのグラフ再描画(非自明)
 `events.game_id`(Pico の暫定ゲーム番号)と BB/RB 行の `events.win_game_count`(当選時ゲーム数)を記録しているので、過去セッションの events からグラフを再構成できる. `db.build_session_series` が events を game_id でゲームに区切り、スランプ系列(各ゲーム終了時の累計差枚)・払い出し系列(OUT を `PAYOUT_GAP_MS` で区切り直し)・当たり系列(BB/RB の `win_game_count`)を作る. `GET /api/sessions/{id}/series` で取得し、フロントはセッション履歴パネルの行クリックで再描画する. 生イベントはそのまま残す方針(累計カウントが events 集計のため. DB は約数MB/セッション増えるが Pi5 なら数年余裕、剪定が要れば別途).
 
+### 確率メトリクスとスコープ(非自明)
+セッションパネルに BB確率 / RB確率 / 合成確率 を 1/N 表記で出す. 分母の回転数の範囲は3つから選択でき、`pdc-prob-scope` localStorage に永続化:
+- セッション中 … 現セッションの BB/RB と回転数(フロントだけで計算)
+- 当日 … ローカル日付 0 時以降(events テーブル集計)
+- 電源再投入後 … サーバ起動後(`main.SERVER_START` 以降の events 集計)
+
+「当日」「電源後」は `GET /api/stats` で取得し、フロントが 5 秒ごとにポーリング. バックエンドは `db.window_counts` で events を ts 範囲で集計、回転数は `LAG(game_id) OVER (ORDER BY id)` で game_id 切替の回数(SQLite 3.25+).
+
+セッションパネルの BB/RB/IN/OUT カウントと確率カードはそれぞれ表示設定で個別オン/オフ可. 既定では確率3つだけ表示し、生カウントは非表示.
+
 ### 演出の言葉遣い
 BB/RB/連チャン等の表示文言は `host/static/labels.json` を編集して差し替えられる. フロントは起動時に `/labels.json` を取得し、`app.js` の `DEFAULT_LABELS` に上書きマージする(取得失敗・キー欠落時はデフォルトのまま). 文言は全モニタ共通(ユーザー別ではない).
 
