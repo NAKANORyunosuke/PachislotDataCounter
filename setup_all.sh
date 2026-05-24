@@ -37,6 +37,15 @@ sudo bash host/scripts/install_service.sh
 
 echo
 echo "=== [5/5] Pico firmware (mpremote + flash) ==="
+# The host service holds /dev/ttyACM0 open via serial_reader, which blocks
+# mpremote from entering raw REPL. Stop the service around the flash step.
+SERVICE_WAS_ACTIVE=0
+if systemctl is-active --quiet pachislot-data-counter; then
+  SERVICE_WAS_ACTIVE=1
+  echo "==> Stopping pachislot-data-counter to release /dev/ttyACM0"
+  sudo systemctl stop pachislot-data-counter
+fi
+
 # Flash the Pico if it is plugged in; skip otherwise. A failing command
 # inside an 'if' condition is exempt from 'set -e', so setup is not aborted.
 if bash pico/scripts/setup.sh && bash pico/scripts/flash.sh; then
@@ -44,6 +53,11 @@ if bash pico/scripts/setup.sh && bash pico/scripts/flash.sh; then
 else
   echo "Pico setup/flash skipped (Pico not connected?)."
   echo "Plug in the Pico and run pico/scripts/setup.sh + flash.sh manually."
+fi
+
+if [[ "$SERVICE_WAS_ACTIVE" -eq 1 ]]; then
+  echo "==> Restarting pachislot-data-counter"
+  sudo systemctl start pachislot-data-counter
 fi
 
 cat <<'EOF'
