@@ -159,6 +159,6 @@ bash pico/scripts/flash.sh                  # main.py を Pico に書き込み
 - [x] Web UI
 - [x] ログ保存
 - [x] IC カードによるセッション管理
-- [ ] 外部出力の検証
-- [ ] Pico GPIO 入力実装(`pico/main.py` で実装、実機検証中)
-- [ ] USB シリアル通信
+- [x] 外部出力の検証
+- [x] Pico GPIO 入力実装
+- [x] USB シリアル通信
