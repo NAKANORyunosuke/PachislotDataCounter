@@ -20,18 +20,41 @@
       <span class="dc-status"><span class="led"></span>LIVE</span>
     </header>
 
-    <section class="panel accent-amber" id="machine-panel" data-panel="machine">
-      <span class="panel-label label-amber">GAME</span>
-      <div>
-        <span class="muted" id="game-count-label">現在のゲーム数</span>
-        <div class="machine-game-wrap">
-          <span class="seg-num" id="game-count">0</span>
-          <span class="machine-unit">G</span>
+    <section class="panel accent-amber hero" id="machine-panel" data-panel="machine">
+      <span class="panel-label label-amber">DASHBOARD</span>
+
+      <div class="hero-top">
+        <div class="hero-game">
+          <span class="muted" id="game-count-label">現在のゲーム数</span>
+          <div class="machine-game-wrap">
+            <span class="seg-num" id="game-count">0</span>
+            <span class="machine-unit">G</span>
+          </div>
+          <div id="renchan-zone" class="hidden">
+            <span id="renchan-zone-label">連チャンゾーン</span>
+            <span id="renchan-remaining">残り 100 G</span>
+          </div>
+        </div>
+
+        <div class="hero-stats">
+          <div class="stat-card" id="m-s-bb">
+            <span class="stat-label seg-red">BB</span>
+            <span class="stat-value seg-red" id="s-BB">0</span>
+          </div>
+          <div class="stat-card" id="m-s-rb">
+            <span class="stat-label seg-blue">RB</span>
+            <span class="stat-value seg-blue" id="s-RB">0</span>
+          </div>
+          <div class="stat-card" id="m-s-pall">
+            <span class="stat-label seg-amber">合成</span>
+            <span class="stat-value seg-amber" id="s-pall">—</span>
+          </div>
         </div>
       </div>
-      <div id="renchan-zone" class="hidden">
-        <span id="renchan-zone-label">連チャンゾーン</span>
-        <span id="renchan-remaining">残り 100 G</span>
+
+      <div class="hero-slump chart-panel" id="slump-chart-panel" data-panel="slump-chart">
+        <span class="hero-section-label">SLUMP</span>
+        <canvas id="slump-chart" height="200"></canvas>
       </div>
     </section>
 
@@ -52,14 +75,6 @@
       </div>
 
       <div class="stats-grid">
-        <div class="stat-card" id="m-s-bb">
-          <span class="stat-label seg-red">BB</span>
-          <span class="stat-value seg-red" id="s-BB">0</span>
-        </div>
-        <div class="stat-card" id="m-s-rb">
-          <span class="stat-label seg-blue">RB</span>
-          <span class="stat-value seg-blue" id="s-RB">0</span>
-        </div>
         <div class="stat-card" id="m-s-in">
           <span class="stat-label seg-green">IN</span>
           <span class="stat-value seg-green" id="s-IN">0</span>
@@ -76,10 +91,6 @@
           <span class="stat-label seg-blue">RB 確率</span>
           <span class="stat-value stat-sub seg-blue" id="s-prb">—</span>
         </div>
-        <div class="stat-card" id="m-s-pall">
-          <span class="stat-label seg-amber">合成</span>
-          <span class="stat-value stat-sub seg-amber" id="s-pall">—</span>
-        </div>
       </div>
 
       <div class="diff-row">
@@ -93,12 +104,6 @@
         <img id="session-settings-qr" class="qr" alt="表示設定 QR" />
         <p class="muted small"><a id="session-settings-link" href="#" target="_blank">リンクで開く</a></p>
       </details>
-    </section>
-
-    <section class="panel accent-cyan chart-panel hidden" id="slump-chart-panel" data-panel="slump-chart">
-      <span class="panel-label label-cyan">SLUMP</span>
-      <h4 class="panel-title">差枚スランプグラフ</h4>
-      <canvas id="slump-chart" height="200"></canvas>
     </section>
 
     <section class="panel accent-red hidden" id="hit-history-panel" data-panel="hit-history">
@@ -185,9 +190,16 @@
     <details class="panel" id="settings-panel" data-panel="settings">
       <summary>表示設定</summary>
       <div id="settings-toggles" class="toggles">
-        <label><input type="checkbox" data-panel="machine-panel" checked /> ゲーム数・連チャン</label>
-        <label><input type="checkbox" data-panel="session-panel" checked /> 現在のセッション</label>
-        <label><input type="checkbox" data-panel="slump-chart-panel" checked /> 差枚スランプグラフ</label>
+        <label><input type="checkbox" data-panel="machine-panel" checked /> ダッシュボード (GAME/BB/RB/合成/スランプ)</label>
+        <label><input type="checkbox" data-panel="slump-chart-panel" checked /> └ スランプグラフ</label>
+        <label><input type="checkbox" data-panel="m-s-bb" checked /> └ BB カード</label>
+        <label><input type="checkbox" data-panel="m-s-rb" checked /> └ RB カード</label>
+        <label><input type="checkbox" data-panel="m-s-pall" checked /> └ 合成カード</label>
+        <label><input type="checkbox" data-panel="session-panel" checked /> 現在のセッション (詳細)</label>
+        <label><input type="checkbox" data-panel="m-s-in" /> └ IN カード</label>
+        <label><input type="checkbox" data-panel="m-s-out" /> └ OUT カード</label>
+        <label><input type="checkbox" data-panel="m-s-pbb" checked /> └ BB 確率</label>
+        <label><input type="checkbox" data-panel="m-s-prb" checked /> └ RB 確率</label>
         <label><input type="checkbox" data-panel="hit-history-panel" checked /> 当たりまでのゲーム数</label>
         <label><input type="checkbox" data-panel="payout-panel" /> 払い出し</label>
         <label><input type="checkbox" data-panel="totals-panel" checked /> 累計</label>
@@ -195,13 +207,6 @@
         <label><input type="checkbox" data-panel="session-chart-panel" checked /> セッション別 差枚推移</label>
         <label><input type="checkbox" data-panel="history-panel" checked /> セッション履歴</label>
         <label><input type="checkbox" data-panel="event-log-panel" checked /> イベントログ</label>
-        <label><input type="checkbox" data-panel="m-s-bb" /> セッション: BB 回数</label>
-        <label><input type="checkbox" data-panel="m-s-rb" /> セッション: RB 回数</label>
-        <label><input type="checkbox" data-panel="m-s-in" /> セッション: IN</label>
-        <label><input type="checkbox" data-panel="m-s-out" /> セッション: OUT</label>
-        <label><input type="checkbox" data-panel="m-s-pbb" checked /> セッション: BB 確率</label>
-        <label><input type="checkbox" data-panel="m-s-prb" checked /> セッション: RB 確率</label>
-        <label><input type="checkbox" data-panel="m-s-pall" checked /> セッション: 合成確率</label>
       </div>
     </details>
 

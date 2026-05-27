@@ -276,19 +276,74 @@ main > * { position: relative; z-index: 1; }
    ::after で同位置に薄い 8 を重ねる. 数字長が変動するので幅制御は省略 */
 
 /* ============================================================
-   1. GAME パネル
+   1. ヒーロー (DASHBOARD) パネル
+     - GAME / BB / RB / 合成 / スランプ を1パネルに集約
    ============================================================ */
-#machine-panel {
+#machine-panel.hero {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 16px;
-  padding: 32px 18px 26px;
+  padding: 26px 18px 18px;
   background:
-    radial-gradient(ellipse 60% 80% at 50% 50%, rgba(255, 194, 51, 0.07), transparent 70%),
+    radial-gradient(ellipse 70% 50% at 50% 0%, rgba(255, 194, 51, 0.08), transparent 70%),
     linear-gradient(180deg, #0d1117 0%, #06090f 100%);
 }
+.hero-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 18px;
+  align-items: center;
+}
+@media (max-width: 640px) {
+  .hero-top { grid-template-columns: 1fr; }
+}
+.hero-game {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.hero-game #game-count-label {
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.62rem;
+  letter-spacing: 0.22em;
+  color: var(--text-dim);
+  text-align: left;
+  margin: 0;
+  display: block;
+}
+.hero-game .machine-game-wrap { gap: 10px; }
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+.hero-stats .stat-card.user-off { display: none !important; }
+.hero-stats .stat-value { font-size: 1.85rem; }
+
+.hero-slump {
+  position: relative;
+  padding: 6px 4px 4px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.05);
+}
+.hero-slump.hidden,
+.hero-slump.user-off { display: none !important; }
+.hero-section-label {
+  display: inline-block;
+  font-family: "Orbitron", sans-serif;
+  font-weight: 800;
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  color: var(--cyan);
+  text-shadow: 0 0 4px var(--cyan-a);
+  margin-bottom: 4px;
+}
+.hero-slump canvas {
+  width: 100% !important;
+  height: 200px !important;
+}
+
 .machine-game-wrap {
   display: flex;
   align-items: baseline;
@@ -296,7 +351,7 @@ main > * { position: relative; z-index: 1; }
 }
 #game-count {
   font-family: "DSEG7 Classic", "DSEG7Classic", "Share Tech Mono", monospace;
-  font-size: clamp(3.6rem, 12vw, 5.6rem);
+  font-size: clamp(3rem, 9vw, 4.8rem);
   font-weight: 400;
   color: var(--amber);
   text-shadow:
@@ -314,7 +369,7 @@ main > * { position: relative; z-index: 1; }
 .machine-unit {
   font-family: "Orbitron", sans-serif;
   font-weight: 800;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
   color: rgba(255, 194, 51, 0.62);
   letter-spacing: 0.06em;
   text-shadow: 0 0 6px rgba(255, 194, 51, 0.4);

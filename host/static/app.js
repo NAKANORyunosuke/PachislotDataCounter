@@ -10,7 +10,6 @@ const historyPanel = document.getElementById("history-panel");
 const chartPanel = document.getElementById("session-chart-panel");
 const eventLogEl = document.getElementById("event-log");
 const bonusOverlay = document.getElementById("bonus-overlay");
-const slumpChartPanel = document.getElementById("slump-chart-panel");
 const payoutChartPanel = document.getElementById("payout-panel");
 const bonusResultEl = document.getElementById("bonus-result");
 const hitHistoryPanel = document.getElementById("hit-history-panel");
@@ -123,7 +122,6 @@ function slumpBounds(data) {
 
 function renderSlumpChart() {
   if (typeof Chart === "undefined") return;
-  slumpChartPanel.classList.toggle("hidden", slumpData.length <= 1);
   const bounds = slumpBounds(slumpData);
   if (!slumpChart) {
     const ctx = document.getElementById("slump-chart").getContext("2d");
@@ -587,7 +585,6 @@ function handleSessionStart(payload) {
 function handleSessionEnd(payload) {
   activeSessionId = null;
   sessionPanel.classList.add("hidden");
-  slumpChartPanel.classList.add("hidden");
   payoutChartPanel.classList.add("hidden");
   hitHistoryPanel.classList.add("hidden");
   resetSessionCounts();
