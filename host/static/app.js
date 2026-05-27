@@ -79,12 +79,7 @@ function renderTotals() {
 }
 
 function renderSessionCounts() {
-  // セッション専用カード (IN/OUT) は常にセッション値.
-  const inEl  = document.getElementById("s-IN");
-  const outEl = document.getElementById("s-OUT");
-  if (inEl)  inEl.textContent  = sessionCounts.IN;
-  if (outEl) outEl.textContent = sessionCounts.OUT;
-  // ヒーロー (BB/RB/合成/差枚) はスコープ依存なので別関数に集約
+  // ヒーロー (BB/RB/合成/差枚) と詳細 (IN/OUT/確率) を一括でスコープ反映
   renderHeroMetrics();
 }
 
@@ -398,12 +393,18 @@ function scopeStats() {
 
 function renderHeroMetrics() {
   const s = scopeStats();
-  // 3 カード (BB / RB / 合成)
-  const bbEl  = document.getElementById("s-BB");
-  const rbEl  = document.getElementById("s-RB");
-  if (bbEl) bbEl.textContent = s.BB ?? 0;
-  if (rbEl) rbEl.textContent = s.RB ?? 0;
+  // ヒーロー 3 カード (BB / RB / 合成)
+  const setText = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = v;
+  };
+  setText("s-BB",  s.BB ?? 0);
+  setText("s-RB",  s.RB ?? 0);
+  setText("s-IN",  s.IN ?? 0);
+  setText("s-OUT", s.OUT ?? 0);
   probEls.ALL.textContent = fmtProb(s.games, (s.BB || 0) + (s.RB || 0));
+  probEls.BB.textContent  = fmtProb(s.games, s.BB || 0);
+  probEls.RB.textContent  = fmtProb(s.games, s.RB || 0);
   // 差枚
   const diff = (s.OUT || 0) - (s.IN || 0);
   const diffEl = document.getElementById("s-diff");
@@ -412,10 +413,6 @@ function renderHeroMetrics() {
     diffEl.classList.toggle("positive", diff > 0);
     diffEl.classList.toggle("negative", diff < 0);
   }
-  // セッション詳細パネルの BB確率/RB確率 は常にセッションスコープで固定表示
-  const sessGames = Math.max(0, currentTotalGames - sessionGameBase);
-  probEls.BB.textContent = fmtProb(sessGames, sessionCounts.BB);
-  probEls.RB.textContent = fmtProb(sessGames, sessionCounts.RB);
   renderScopeContext();
   renderGameDisplay();
 }
