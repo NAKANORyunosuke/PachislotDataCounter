@@ -62,6 +62,16 @@ fi
 
 step "run.sh start  args=$*  log=$LOG_FILE"
 
+# systemd 配下で動いているかを INVOCATION_ID で検出.
+# ExecStart=bash run.sh で起動された場合、自分自身が active なサービスなので
+# 「既存サービス停止 → unit 登録」を実行すると自殺ループになる. systemd 経由
+# なら前処理を全部スキップして uvicorn の起動だけ行う.
+UNDER_SYSTEMD=0
+if [[ -n "${INVOCATION_ID:-}" ]]; then
+  UNDER_SYSTEMD=1
+  log "systemd 配下 (INVOCATION_ID=$INVOCATION_ID) — 前処理スキップ"
+fi
+
 # --- systemd unit を冪等にインストール (未登録 or 内容が古い場合のみ) ---------
 ensure_service_installed() {
   local src="$HOST_DIR/systemd/pachislot-data-counter.service"
@@ -106,40 +116,42 @@ fi
 BIND_HOST="${HOST:-0.0.0.0}"
 BIND_PORT="${PORT:-8000}"
 
-# --- 既存サービス停止 -------------------------------------------------------
-step "既存サービス停止 (pachislot-data-counter)"
-if systemctl is-active --quiet pachislot-data-counter.service 2>/dev/null; then
-  log "active を検出。stop を発行"
-  sudo systemctl stop pachislot-data-counter.service || true
-  log "stop 完了"
-else
-  log "inactive (停止不要)"
-fi
-
-# --- ポート解放 -------------------------------------------------------------
-step "ポート tcp/$BIND_PORT の解放確認"
-if command -v fuser >/dev/null 2>&1; then
-  if fuser -s -n tcp "$BIND_PORT" 2>/dev/null; then
-    log "占有プロセスを検出 → kill"
-    sudo fuser -k -n tcp "$BIND_PORT" 2>/dev/null || fuser -k -n tcp "$BIND_PORT" 2>/dev/null || true
-    for i in 1 2 3 4 5; do
-      if ! fuser -s -n tcp "$BIND_PORT" 2>/dev/null; then
-        log "解放確認 ($((i*500)) ms 経過)"
-        break
-      fi
-      log "  待機中... ($((i*500)) ms)"
-      sleep 0.5
-    done
+if [[ "$UNDER_SYSTEMD" -eq 0 ]]; then
+  # --- 既存サービス停止 -----------------------------------------------------
+  step "既存サービス停止 (pachislot-data-counter)"
+  if systemctl is-active --quiet pachislot-data-counter.service 2>/dev/null; then
+    log "active を検出。stop を発行"
+    sudo systemctl stop pachislot-data-counter.service || true
+    log "stop 完了"
   else
-    log "占有なし"
+    log "inactive (停止不要)"
   fi
-else
-  log "fuser コマンドが無いのでスキップ"
-fi
 
-# --- unit 登録 (停止後に行う) ------------------------------------------------
-step "systemd unit 登録/更新"
-ensure_service_installed
+  # --- ポート解放 ----------------------------------------------------------
+  step "ポート tcp/$BIND_PORT の解放確認"
+  if command -v fuser >/dev/null 2>&1; then
+    if fuser -s -n tcp "$BIND_PORT" 2>/dev/null; then
+      log "占有プロセスを検出 → kill"
+      sudo fuser -k -n tcp "$BIND_PORT" 2>/dev/null || fuser -k -n tcp "$BIND_PORT" 2>/dev/null || true
+      for i in 1 2 3 4 5; do
+        if ! fuser -s -n tcp "$BIND_PORT" 2>/dev/null; then
+          log "解放確認 ($((i*500)) ms 経過)"
+          break
+        fi
+        log "  待機中... ($((i*500)) ms)"
+        sleep 0.5
+      done
+    else
+      log "占有なし"
+    fi
+  else
+    log "fuser コマンドが無いのでスキップ"
+  fi
+
+  # --- unit 登録 (停止後に行う) -------------------------------------------
+  step "systemd unit 登録/更新"
+  ensure_service_installed
+fi
 
 cd "$HOST_DIR"
 
