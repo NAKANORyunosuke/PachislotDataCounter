@@ -15,6 +15,7 @@ const payoutChartPanel = document.getElementById("payout-panel");
 const bonusResultEl = document.getElementById("bonus-result");
 const hitHistoryPanel = document.getElementById("hit-history-panel");
 const hitListEl = document.getElementById("hit-list");
+const hitDotsEl = document.getElementById("hit-dots");
 const historyDetailPanel = document.getElementById("history-detail-panel");
 const historyDetailTitle = document.getElementById("history-detail-title");
 const historyHitListEl = document.getElementById("history-hit-list");
@@ -133,7 +134,7 @@ function renderSlumpChart() {
           {
             label: "差枚",
             data: slumpData,
-            borderColor: "#ffca28",
+            borderColor: "#5fe4ff",
             fill: false,
             pointRadius: 0,
             borderWidth: 2,
@@ -150,17 +151,17 @@ function renderSlumpChart() {
             type: "linear",
             min: 0,
             max: bounds.xMax,
-            title: { display: true, text: "ゲーム数", color: "#aaa" },
+            title: { display: true, text: "ゲーム数", color: "#5a6678" },
             // ゲーム数は整数なので目盛りも整数だけにする(2.5 等を出さない).
-            ticks: { color: "#aaa", precision: 0 },
-            grid: { color: "#2a2a2a" },
+            ticks: { color: "#5a6678", precision: 0 },
+            grid: { color: "#1a2030" },
           },
           y: {
             min: bounds.yMin,
             max: bounds.yMax,
-            ticks: { color: "#aaa", stepSize: 500 },
+            ticks: { color: "#5a6678", stepSize: 500 },
             grid: {
-              color: (c) => (c.tick.value === 0 ? "#666" : "#2a2a2a"),
+              color: (c) => (c.tick.value === 0 ? "#3a4456" : "#1a2030"),
             },
           },
         },
@@ -208,7 +209,7 @@ function renderPayoutChart() {
           {
             label: "払い出し",
             data: payoutMedals,
-            backgroundColor: "rgba(102,187,106,0.75)",
+            backgroundColor: "rgba(56,227,104,0.85)",
           },
         ],
       },
@@ -216,11 +217,11 @@ function renderPayoutChart() {
         animation: false,
         plugins: { legend: { display: false } },
         scales: {
-          x: { ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
+          x: { ticks: { color: "#5a6678" }, grid: { color: "#1a2030" } },
           y: {
             beginAtZero: true,
-            ticks: { color: "#aaa" },
-            grid: { color: "#2a2a2a" },
+            ticks: { color: "#5a6678" },
+            grid: { color: "#1a2030" },
           },
         },
       },
@@ -243,7 +244,7 @@ function hitBarConfig(hits) {
           label: "当たりG数",
           data: hits.map((h) => h.game),
           backgroundColor: hits.map((h) =>
-            h.type === "BB" ? "#ef5350" : "#42a5f5"
+            h.type === "BB" ? "#ff3a3a" : "#4ab5ff"
           ),
         },
       ],
@@ -252,8 +253,8 @@ function hitBarConfig(hits) {
       animation: false,
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
-        y: { beginAtZero: true, ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
+        x: { ticks: { color: "#5a6678" }, grid: { color: "#1a2030" } },
+        y: { beginAtZero: true, ticks: { color: "#5a6678" }, grid: { color: "#1a2030" } },
       },
     },
   };
@@ -273,6 +274,19 @@ function renderHitList(el, hits) {
   }
 }
 
+// 当たり履歴ドット行: 直近16ヒットを古→新の並びで色付きドット表示(店舗カウンタ風)
+function renderHitDots(hits) {
+  if (!hitDotsEl) return;
+  hitDotsEl.innerHTML = "";
+  const recent = hits.slice(-16);
+  for (const h of recent) {
+    const d = document.createElement("span");
+    d.className = `dot ${h.type === "BB" ? "bb" : "rb"}`;
+    d.title = `${h.type} @ ${h.game} G`;
+    hitDotsEl.appendChild(d);
+  }
+}
+
 function resetHits() {
   hitGames = [];
   renderHitChart();
@@ -286,6 +300,7 @@ function addHit(type, games) {
 function renderHitChart() {
   hitHistoryPanel.classList.toggle("hidden", hitGames.length === 0);
   renderHitList(hitListEl, hitGames);
+  renderHitDots(hitGames);
   if (typeof Chart === "undefined") return;
   if (!hitChart) {
     hitChart = new Chart(
@@ -444,7 +459,7 @@ function renderHistorySlump(slump) {
         {
           label: "差枚",
           data: slump,
-          borderColor: "#ffca28",
+          borderColor: "#5fe4ff",
           fill: false,
           pointRadius: 0,
           borderWidth: 2,
@@ -461,15 +476,15 @@ function renderHistorySlump(slump) {
           type: "linear",
           min: 0,
           max: b.xMax,
-          title: { display: true, text: "ゲーム数", color: "#aaa" },
-          ticks: { color: "#aaa", precision: 0 },
-          grid: { color: "#2a2a2a" },
+          title: { display: true, text: "ゲーム数", color: "#5a6678" },
+          ticks: { color: "#5a6678", precision: 0 },
+          grid: { color: "#1a2030" },
         },
         y: {
           min: b.yMin,
           max: b.yMax,
-          ticks: { color: "#aaa", stepSize: 500 },
-          grid: { color: (c) => (c.tick.value === 0 ? "#666" : "#2a2a2a") },
+          ticks: { color: "#5a6678", stepSize: 500 },
+          grid: { color: (c) => (c.tick.value === 0 ? "#3a4456" : "#1a2030") },
         },
       },
     },
@@ -497,7 +512,7 @@ function renderChart(sessions) {
           label: "差枚",
           data: diffs,
           backgroundColor: diffs.map((v) =>
-            v >= 0 ? "rgba(76,175,80,0.7)" : "rgba(239,83,80,0.7)"
+            v >= 0 ? "rgba(56,227,104,0.75)" : "rgba(255,45,45,0.75)"
           ),
         },
       ],
@@ -505,8 +520,8 @@ function renderChart(sessions) {
     options: {
       plugins: { legend: { display: false } },
       scales: {
-        x: { ticks: { color: "#aaa" } },
-        y: { ticks: { color: "#aaa" }, grid: { color: "#2a2a2a" } },
+        x: { ticks: { color: "#5a6678" } },
+        y: { ticks: { color: "#5a6678" }, grid: { color: "#1a2030" } },
       },
     },
   });

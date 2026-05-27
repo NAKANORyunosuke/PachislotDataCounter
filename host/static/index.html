@@ -4,12 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Pachislot Data Counter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@600;800;900&display=swap" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/dseg@0.46.0/css/dseg.css" />
   <link rel="stylesheet" href="/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <main>
-    <h1>Pachislot Data Counter</h1>
+    <header class="dc-header">
+      <span class="dc-brand">PACHISLOT</span>
+      <span class="dc-sub">DATA COUNTER</span>
+    </header>
 
     <details id="settings-panel" class="panel">
       <summary>表示設定</summary>
@@ -34,10 +41,11 @@
       </div>
     </details>
 
-    <section id="machine-panel" class="panel">
+    <section id="machine-panel" class="panel panel-game">
+      <h2 class="panel-tab tab-amber">GAME</h2>
       <div class="game-count-row">
         <span class="muted" id="game-count-label">現在のゲーム数</span>
-        <span><span id="game-count" class="game-count">0</span> G</span>
+        <span class="game-count-wrap"><span id="game-count" class="game-count led led-amber">0</span><span class="unit">G</span></span>
       </div>
       <div id="renchan-zone" class="renchan-zone hidden">
         <span class="renchan-zone-label" id="renchan-zone-label">連チャンゾーン</span>
@@ -46,6 +54,7 @@
     </section>
 
     <section id="session-panel" class="panel hidden">
+      <h2 class="panel-tab tab-cyan">PLAYER</h2>
       <header class="panel-head">
         <div>
           <div class="muted">現在のセッション</div>
@@ -60,17 +69,17 @@
         <button type="button" data-scope="boot">電源後</button>
       </div>
       <div class="grid">
-        <div class="card big" id="m-s-bb"><div class="label">BB</div><div class="value" id="s-BB">0</div></div>
-        <div class="card reg" id="m-s-rb"><div class="label">RB</div><div class="value" id="s-RB">0</div></div>
-        <div class="card in" id="m-s-in"><div class="label">IN</div><div class="value" id="s-IN">0</div></div>
-        <div class="card out" id="m-s-out"><div class="label">OUT</div><div class="value" id="s-OUT">0</div></div>
-        <div class="card prob" id="m-s-pbb"><div class="label">BB確率</div><div class="value" id="s-pbb">—</div></div>
-        <div class="card prob" id="m-s-prb"><div class="label">RB確率</div><div class="value" id="s-prb">—</div></div>
-        <div class="card prob" id="m-s-pall"><div class="label">合成</div><div class="value" id="s-pall">—</div></div>
+        <div class="card big" id="m-s-bb"><div class="label">BB</div><div class="value led led-red" id="s-BB">0</div></div>
+        <div class="card reg" id="m-s-rb"><div class="label">RB</div><div class="value led led-blue" id="s-RB">0</div></div>
+        <div class="card in" id="m-s-in"><div class="label">IN</div><div class="value led led-green" id="s-IN">0</div></div>
+        <div class="card out" id="m-s-out"><div class="label">OUT</div><div class="value led led-orange" id="s-OUT">0</div></div>
+        <div class="card prob" id="m-s-pbb"><div class="label">BB確率</div><div class="value led led-red dim" id="s-pbb">—</div></div>
+        <div class="card prob" id="m-s-prb"><div class="label">RB確率</div><div class="value led led-blue dim" id="s-prb">—</div></div>
+        <div class="card prob" id="m-s-pall"><div class="label">合成</div><div class="value led led-amber dim" id="s-pall">—</div></div>
       </div>
       <div class="diff-row">
-        <div class="muted">差枚</div>
-        <div id="s-diff" class="diff-value">0</div>
+        <div class="label-tag">差枚</div>
+        <div id="s-diff" class="diff-value led">0</div>
       </div>
       <details class="settings-qr">
         <summary>表示設定を変更 (QR)</summary>
@@ -81,18 +90,19 @@
     </section>
 
     <section id="slump-chart-panel" class="panel hidden">
-      <h2>差枚スランプグラフ</h2>
+      <h2 class="panel-tab tab-cyan">SLUMP</h2>
       <canvas id="slump-chart" height="200"></canvas>
     </section>
 
     <section id="hit-history-panel" class="panel hidden">
-      <h2>当たりまでのゲーム数</h2>
+      <h2 class="panel-tab tab-red">HIT HISTORY</h2>
+      <div id="hit-dots" class="hit-dots"></div>
       <canvas id="hit-chart" height="180"></canvas>
       <ul id="hit-list" class="hit-list"></ul>
     </section>
 
     <section id="payout-panel" class="panel hidden">
-      <h2>払い出し</h2>
+      <h2 class="panel-tab tab-orange">PAYOUT</h2>
       <div id="bonus-result" class="muted small">-</div>
       <canvas id="payout-chart" height="200"></canvas>
     </section>
@@ -105,32 +115,32 @@
     </section>
 
     <section id="totals-panel" class="panel">
-      <h2>累計</h2>
+      <h2 class="panel-tab tab-amber">TOTAL</h2>
       <div class="grid">
-        <div class="card big"><div class="label">BB</div><div class="value" id="BB">0</div></div>
-        <div class="card reg"><div class="label">RB</div><div class="value" id="RB">0</div></div>
-        <div class="card in"><div class="label">IN</div><div class="value" id="IN">0</div></div>
-        <div class="card out"><div class="label">OUT</div><div class="value" id="OUT">0</div></div>
+        <div class="card big"><div class="label">BB</div><div class="value led led-red" id="BB">0</div></div>
+        <div class="card reg"><div class="label">RB</div><div class="value led led-blue" id="RB">0</div></div>
+        <div class="card in"><div class="label">IN</div><div class="value led led-green" id="IN">0</div></div>
+        <div class="card out"><div class="label">OUT</div><div class="value led led-orange" id="OUT">0</div></div>
       </div>
     </section>
 
     <section id="user-stats" class="panel hidden">
-      <h2 id="user-stats-title">ユーザー累計</h2>
+      <h2 id="user-stats-title" class="panel-tab tab-cyan">USER TOTAL</h2>
       <div class="grid small-grid">
-        <div class="mini-card"><div class="label">BB</div><div class="value" id="u-BB">0</div></div>
-        <div class="mini-card"><div class="label">RB</div><div class="value" id="u-RB">0</div></div>
-        <div class="mini-card"><div class="label">IN</div><div class="value" id="u-IN">0</div></div>
-        <div class="mini-card"><div class="label">OUT</div><div class="value" id="u-OUT">0</div></div>
+        <div class="mini-card"><div class="label">BB</div><div class="value led led-red" id="u-BB">0</div></div>
+        <div class="mini-card"><div class="label">RB</div><div class="value led led-blue" id="u-RB">0</div></div>
+        <div class="mini-card"><div class="label">IN</div><div class="value led led-green" id="u-IN">0</div></div>
+        <div class="mini-card"><div class="label">OUT</div><div class="value led led-orange" id="u-OUT">0</div></div>
       </div>
     </section>
 
     <section id="session-chart-panel" class="panel hidden">
-      <h2>セッション別 差枚推移</h2>
+      <h2 class="panel-tab tab-cyan">SESSION TREND</h2>
       <canvas id="session-chart" height="200"></canvas>
     </section>
 
     <section id="history-panel" class="panel hidden">
-      <h2>セッション履歴</h2>
+      <h2 class="panel-tab tab-amber">SESSION LOG</h2>
       <p class="muted small">行をクリックすると差枚・当たりG数グラフを表示</p>
       <table class="history">
         <thead>
@@ -141,7 +151,7 @@
     </section>
 
     <section id="history-detail-panel" class="panel hidden">
-      <h2 id="history-detail-title">セッション詳細</h2>
+      <h2 id="history-detail-title" class="panel-tab tab-cyan">SESSION DETAIL</h2>
       <div class="muted small">差枚スランプ</div>
       <canvas id="history-slump-chart" height="180"></canvas>
       <div class="muted small history-hit-label">当たりまでのゲーム数</div>
@@ -150,7 +160,7 @@
     </section>
 
     <section id="event-log-panel" class="panel">
-      <h2>イベントログ</h2>
+      <h2 class="panel-tab tab-amber">EVENT LOG</h2>
       <ul id="event-log" class="event-log"></ul>
     </section>
 
