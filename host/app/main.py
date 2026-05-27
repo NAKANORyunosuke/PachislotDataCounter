@@ -18,6 +18,7 @@ from .db import (
     count_by_type_for_user,
     count_by_type_for_session,
     events_for_session,
+    events_for_window,
     get_connection,
     get_display_settings,
     get_session,
@@ -167,6 +168,41 @@ def get_stats(user_id: int | None = None) -> dict:
             )
             result["all_user"] = window_counts(conn, user_id=user_id)
     return result
+
+
+@app.get("/api/slump")
+def get_slump(scope: str, user_id: int | None = None) -> dict:
+    """ヒーロー上のスランプグラフをスコープ別に再構成する.
+
+    scope: user-today / user-all / all-today / all-all
+    (user-session はライブデータでフロントが描くのでこのエンドポイントは使わない)
+    """
+    today_iso = _today_start_iso()
+    scope_map: dict[str, tuple[str | None, bool]] = {
+        "user-today": (today_iso, True),
+        "user-all":   (None,      True),
+        "all-today":  (today_iso, False),
+        "all-all":    (None,      False),
+    }
+    if scope not in scope_map:
+        return {"slump": [{"x": 0, "y": 0}]}
+    since, needs_user = scope_map[scope]
+    uid = user_id if needs_user else None
+    if needs_user and uid is None:
+        return {"slump": [{"x": 0, "y": 0}]}
+    with get_connection() as conn:
+        events = events_for_window(conn, since_iso=since, user_id=uid)
+    slump = build_session_series(events).get("slump", [])
+    # 長期窓ではポイントが膨らむのでダウンサンプル.
+    # 始端/終端は保ち、中間を等間隔で間引く.
+    MAX_POINTS = 1500
+    if len(slump) > MAX_POINTS:
+        step = max(1, len(slump) // MAX_POINTS)
+        sampled = slump[::step]
+        if sampled[-1] is not slump[-1]:
+            sampled.append(slump[-1])
+        slump = sampled
+    return {"slump": slump}
 
 
 @app.get("/api/events/stream")

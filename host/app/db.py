@@ -152,6 +152,34 @@ def events_for_session(conn: sqlite3.Connection, session_id: int) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def events_for_window(
+    conn: sqlite3.Connection,
+    since_iso: str | None = None,
+    user_id: int | None = None,
+) -> list[dict]:
+    """時間/ユーザーで絞り込んだ events を返す.
+
+    スランプ等の系列をスコープ別に再構成するときに使う.
+    """
+    where_parts: list[str] = []
+    params: list = []
+    join_clause = ""
+    if user_id is not None:
+        join_clause = "JOIN sessions s ON s.id = e.session_id"
+        where_parts.append("s.user_id = ?")
+        params.append(user_id)
+    if since_iso is not None:
+        where_parts.append("e.ts >= ?")
+        params.append(since_iso)
+    where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+    rows = conn.execute(
+        f"SELECT e.id, e.ts, e.type, e.game_id, e.win_game_count "
+        f"FROM events e {join_clause} {where_sql} ORDER BY e.id ASC",
+        params,
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def _ts_to_ms(iso: str) -> float:
     return datetime.fromisoformat(iso).timestamp() * 1000
 

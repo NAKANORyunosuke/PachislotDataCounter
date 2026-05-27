@@ -35,7 +35,13 @@ let activeSessionId = null;
 let activeUserId = null;
 let chart = null;
 let slumpChart = null;
-let slumpData = [];
+// liveSlumpData は user-session スコープで描画する「現セッションの差枚系列」.
+// slumpData は実際にチャートに表示中の系列で、スコープに応じて
+//   user-session: liveSlumpData (同一参照)
+//   それ以外     : /api/slump から取得した配列
+// になる. 切替は applyScopeSlump() で行う.
+let liveSlumpData = [{ x: 0, y: 0 }];
+let slumpData = liveSlumpData;
 let slumpBaseGames = null;   // セッション開始時点の累計ゲーム数(X 軸の原点)
 let currentTotalGames = 0;   // バックエンドの total_games 最新値
 let payoutChart = null;
@@ -96,19 +102,23 @@ function renderGameInfo(count, inZone) {
 }
 
 // --- 差枚スランプグラフ -------------------------------------------------
-// X 軸はセッション内の累計ゲーム数(バックエンドの total_games の差分).
+// liveSlumpData はセッション中の差枚 (X = total_games - sessionBase). スコープ
+// が user-session の時だけ slumpData と同一参照にしてリアルタイム描画する.
 function resetSlump() {
   slumpBaseGames = null;
-  slumpData = [{ x: 0, y: 0 }];
+  liveSlumpData = [{ x: 0, y: 0 }];
+  if (probScope === "user-session") slumpData = liveSlumpData;
   renderSlumpChart();
 }
 
 function pushSlumpPoint() {
   if (slumpBaseGames === null) slumpBaseGames = currentTotalGames;
-  slumpData.push({
+  liveSlumpData.push({
     x: currentTotalGames - slumpBaseGames,
     y: sessionCounts.OUT - sessionCounts.IN,
   });
+  if (probScope !== "user-session") return;
+  slumpData = liveSlumpData;
   renderSlumpChart();
 }
 
@@ -410,6 +420,8 @@ async function fetchStats() {
     userTodayStats = d.today_user || { ...EMPTY_STATS };
     userAllStats   = d.all_user   || { ...EMPTY_STATS };
     renderHeroMetrics();
+    // 非セッションスコープではスランプも 5 秒ごとに refresh する
+    if (probScope !== "user-session") applyScopeSlump();
   } catch {
     // ネットワーク失敗時はスキップして次のポーリングに任せる
   }
@@ -426,6 +438,31 @@ function setScope(scope) {
     }
   }
   renderHeroMetrics();
+  applyScopeSlump();
+}
+
+// スコープに合わせてスランプグラフの表示データを切替.
+//   user-session ... liveSlumpData (リアルタイム差枚)
+//   それ以外     ... /api/slump?scope=...&user_id=... を取得
+async function applyScopeSlump() {
+  if (probScope === "user-session") {
+    slumpData = liveSlumpData;
+    renderSlumpChart();
+    return;
+  }
+  const params = new URLSearchParams({ scope: probScope });
+  if (activeUserId != null) params.set("user_id", String(activeUserId));
+  try {
+    const res = await fetch(`/api/slump?${params}`, { cache: "no-store" });
+    if (!res.ok) return;
+    const d = await res.json();
+    slumpData = Array.isArray(d.slump) && d.slump.length > 0
+      ? d.slump
+      : [{ x: 0, y: 0 }];
+    renderSlumpChart();
+  } catch {
+    // 取得失敗時は次の polling に任せる
+  }
 }
 
 function renderHistoryHits(hits) {
@@ -671,9 +708,12 @@ async function restoreActiveSession(active, totalGames) {
     if (!res.ok) return;
     const series = await res.json();
     if (Array.isArray(series.slump) && series.slump.length > 0) {
-      slumpData = series.slump.slice();
+      liveSlumpData = series.slump.slice();
+      if (probScope === "user-session") slumpData = liveSlumpData;
       renderSlumpChart();
     }
+    // 復元後、現在のスコープに合わせて表示を整える (非セッションなら API 再取得)
+    applyScopeSlump();
     if (Array.isArray(series.hits)) {
       hitGames = series.hits.map((h) => ({ type: h.type, game: h.game }));
       renderHitChart();
