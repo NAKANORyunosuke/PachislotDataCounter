@@ -40,6 +40,32 @@ if [[ ! -x "$VENV/bin/uvicorn" ]]; then
   exit 1
 fi
 
+# --- systemd unit を冪等にインストール (未登録 or 内容が古い場合のみ) ---------
+# 順序: 既存サービス停止 → ここで登録/更新 → このスクリプトの末尾で起動
+ensure_service_installed() {
+  local src="$HOST_DIR/systemd/pachislot-data-counter.service"
+  local dst="/etc/systemd/system/pachislot-data-counter.service"
+  if [[ ! -f "$src" ]]; then
+    return  # ソースが無いリポジトリでは何もしない
+  fi
+  if [[ -f "$dst" ]] && cmp -s "$src" "$dst" 2>/dev/null; then
+    return  # 既に同一内容で登録済み
+  fi
+  echo "==> Installing systemd unit: $dst"
+  if ! sudo -n true 2>/dev/null && [[ ! -t 0 ]]; then
+    # detach 中 (tty 無し) で sudo がパスワード要求してくると詰むのでスキップ.
+    echo "  (sudo non-interactive 不可。detach 中はスキップ。手動で sudo bash host/scripts/install_service.sh を実行してください。)"
+    return
+  fi
+  if ! sudo install -m 0644 "$src" "$dst"; then
+    echo "  (sudo install 失敗。service 登録をスキップして起動を続行します。)"
+    return
+  fi
+  sudo systemctl daemon-reload || true
+  sudo systemctl enable pachislot-data-counter 2>/dev/null || true
+  echo "  systemd unit 登録完了 (自動起動有効化)."
+}
+
 # Load host/.env (PUBLIC_BASE_URL etc.) so it applies to dev runs too.
 if [[ -f "$HOST_DIR/.env" ]]; then
   set -a
@@ -68,6 +94,9 @@ if command -v fuser >/dev/null 2>&1; then
     done
   fi
 fi
+
+# サービス停止 (上で) → systemd unit を登録/更新 → このあと uvicorn 起動.
+ensure_service_installed
 
 cd "$HOST_DIR"
 
