@@ -127,6 +127,9 @@ function renderSlumpChart() {
   const bounds = slumpBounds(slumpData);
   if (!slumpChart) {
     const ctx = document.getElementById("slump-chart").getContext("2d");
+    const grad = ctx.createLinearGradient(0, 0, 0, 240);
+    grad.addColorStop(0, "rgba(95,228,255,0.28)");
+    grad.addColorStop(1, "rgba(95,228,255,0.02)");
     slumpChart = new Chart(ctx, {
       type: "line",
       data: {
@@ -135,10 +138,12 @@ function renderSlumpChart() {
             label: "差枚",
             data: slumpData,
             borderColor: "#5fe4ff",
-            fill: false,
+            backgroundColor: grad,
+            fill: true,
             pointRadius: 0,
-            borderWidth: 2,
-            tension: 0,
+            pointHitRadius: 8,
+            borderWidth: 1.6,
+            tension: 0.25,
           },
         ],
       },
@@ -210,6 +215,8 @@ function renderPayoutChart() {
             label: "払い出し",
             data: payoutMedals,
             backgroundColor: "rgba(56,227,104,0.85)",
+            borderRadius: 4,
+            maxBarThickness: 28,
           },
         ],
       },
@@ -246,6 +253,8 @@ function hitBarConfig(hits) {
           backgroundColor: hits.map((h) =>
             h.type === "BB" ? "#ff3a3a" : "#4ab5ff"
           ),
+          borderRadius: 4,
+          maxBarThickness: 28,
         },
       ],
     },
@@ -264,10 +273,12 @@ function renderHitList(el, hits) {
   el.innerHTML = "";
   for (let i = hits.length - 1; i >= 0; i--) {  // 新しい当たりを上に
     const li = document.createElement("li");
+    li.className = `type-${hits[i].type}`;
     const ty = document.createElement("span");
-    ty.className = `type ${hits[i].type}`;
+    ty.className = "hit-type";
     ty.textContent = hits[i].type;
     const g = document.createElement("span");
+    g.className = "hit-game";
     g.textContent = `${hits[i].game} G`;
     li.append(ty, g);
     el.appendChild(li);
@@ -384,6 +395,7 @@ function fmtTs(iso) {
 
 function appendEventLog({ type, ts, session_id }) {
   const li = document.createElement("li");
+  li.className = `log-${type.toLowerCase()}`;
   const t = document.createElement("span");
   t.className = "ts";
   t.textContent = new Date(ts).toLocaleTimeString();
@@ -452,6 +464,9 @@ function renderHistorySlump(slump) {
   const b = slumpBounds(slump);
   if (historySlumpChart) historySlumpChart.destroy();
   const ctx = document.getElementById("history-slump-chart").getContext("2d");
+  const hgrad = ctx.createLinearGradient(0, 0, 0, 220);
+  hgrad.addColorStop(0, "rgba(95,228,255,0.28)");
+  hgrad.addColorStop(1, "rgba(95,228,255,0.02)");
   historySlumpChart = new Chart(ctx, {
     type: "line",
     data: {
@@ -460,10 +475,12 @@ function renderHistorySlump(slump) {
           label: "差枚",
           data: slump,
           borderColor: "#5fe4ff",
-          fill: false,
+          backgroundColor: hgrad,
+          fill: true,
           pointRadius: 0,
-          borderWidth: 2,
-          tension: 0,
+          pointHitRadius: 8,
+          borderWidth: 1.6,
+          tension: 0.25,
         },
       ],
     },
@@ -514,6 +531,8 @@ function renderChart(sessions) {
           backgroundColor: diffs.map((v) =>
             v >= 0 ? "rgba(56,227,104,0.75)" : "rgba(255,45,45,0.75)"
           ),
+          borderRadius: 4,
+          maxBarThickness: 28,
         },
       ],
     },

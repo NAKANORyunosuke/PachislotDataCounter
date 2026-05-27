@@ -6,3 +6,4 @@ host/data/*.db-journal
 .env
 run.log
 *.log
+*.zip
