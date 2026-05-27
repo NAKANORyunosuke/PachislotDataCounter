@@ -19,6 +19,7 @@ from .db import (
     complete_registration,
     count_by_type,
     count_by_type_for_user,
+    count_by_type_for_session,
     events_for_session,
     get_connection,
     get_display_settings,
@@ -26,6 +27,7 @@ from .db import (
     get_user_by_id,
     get_user_by_token,
     init_db,
+    parse_display_settings,
     sessions_for_user,
     set_display_settings,
     window_counts,
@@ -51,10 +53,44 @@ EVENT_KEYS = ("IN", "OUT", "BB", "RB")
 def _snapshot() -> dict:
     with get_connection() as conn:
         counts = count_by_type(conn)
-    snap: dict = {k: counts.get(k, 0) for k in EVENT_KEYS}
-    snap["game_count"] = game_counter.game_count
-    snap["in_renchan_zone"] = game_counter.in_renchan_zone
-    snap["total_games"] = game_counter.total_games
+        snap: dict = {k: counts.get(k, 0) for k in EVENT_KEYS}
+        snap["game_count"] = game_counter.game_count
+        snap["in_renchan_zone"] = game_counter.in_renchan_zone
+        snap["total_games"] = game_counter.total_games
+
+        # 接続/再接続時にアクティブセッションを復元できるよう同梱する.
+        # (session_counts は確率カードの即時表示用, session_game_count は
+        #  sessionGameBase 復元用. スランプ系列は /api/sessions/{id}/series で別途取得)
+        sid = session_manager.active_session_id
+        if sid is not None:
+            session = get_session(conn, sid)
+            if session is not None:
+                user = get_user_by_id(conn, session["user_id"])
+                if user is not None:
+                    session_counts = count_by_type_for_session(conn, sid)
+                    row = conn.execute(
+                        "SELECT COUNT(DISTINCT game_id) AS n FROM events "
+                        "WHERE session_id = ? AND game_id IS NOT NULL",
+                        (sid,),
+                    ).fetchone()
+                    session_game_count = int(row["n"]) if row else 0
+                    snap["active_session"] = {
+                        "session_id": sid,
+                        "user": {
+                            "id": user["id"],
+                            "name": user["name"],
+                            "registered": bool(user["registered"]),
+                            "card_idm": user["card_idm"],
+                            "display_settings": parse_display_settings(
+                                user["display_settings"]
+                            ),
+                        },
+                        "started_at": session["started_at"],
+                        "session_counts": {
+                            k: session_counts.get(k, 0) for k in EVENT_KEYS
+                        },
+                        "session_game_count": session_game_count,
+                    }
     return snap
 
 

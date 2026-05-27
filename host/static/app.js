@@ -582,6 +582,56 @@ function handleSessionStart(payload) {
   loadUserHistory(payload.user.id);
 }
 
+// ページ再読込時に snapshot へ同梱されたアクティブセッション情報を使い、
+// セッションパネル/スランプ/履歴/払い出しを復元する.
+async function restoreActiveSession(active, totalGames) {
+  activeSessionId = active.session_id;
+  resetSessionCounts();
+  for (const k of KEYS) sessionCounts[k] = active.session_counts?.[k] ?? 0;
+  renderSessionCounts();
+
+  sessionGameBase = Math.max(0, totalGames - (active.session_game_count ?? 0));
+  resetSlump();
+  resetPayout();
+  resetHits();
+  renderProbabilities();
+
+  sessionPanel.classList.remove("hidden");
+  const name = active.user.name || "(未登録カード)";
+  document.getElementById("session-user").textContent = name;
+  document.getElementById("session-started").textContent = `開始 ${fmtTs(active.started_at)}`;
+  if (active.user.registered) hideRegisterPanel();
+  applyUserProfile(active.user.display_settings);
+  const qr = document.getElementById("session-settings-qr");
+  if (qr) qr.src = `/api/qr?user=${active.user.id}`;
+  const link = document.getElementById("session-settings-link");
+  if (link) {
+    link.href = `${location.origin}/settings?user=${active.user.id}`;
+    link.textContent = link.href;
+  }
+  loadUserHistory(active.user.id);
+
+  try {
+    const res = await fetch(`/api/sessions/${active.session_id}/series`);
+    if (!res.ok) return;
+    const series = await res.json();
+    if (Array.isArray(series.slump) && series.slump.length > 0) {
+      slumpData = series.slump.slice();
+      renderSlumpChart();
+    }
+    if (Array.isArray(series.hits)) {
+      hitGames = series.hits.map((h) => ({ type: h.type, game: h.game }));
+      renderHitChart();
+    }
+    if (Array.isArray(series.payout)) {
+      resetPayout();
+      for (const p of series.payout) addPayout(p);
+    }
+  } catch (e) {
+    /* シリーズ取得失敗時は静かに諦める. ライブ更新で徐々に埋まる */
+  }
+}
+
 function handleSessionEnd(payload) {
   activeSessionId = null;
   sessionPanel.classList.add("hidden");
@@ -671,6 +721,9 @@ source.addEventListener("snapshot", (e) => {
   renderTotals();
   renderGameInfo(data.game_count ?? 0, data.in_renchan_zone ?? false);
   currentTotalGames = data.total_games ?? 0;
+  if (data.active_session) {
+    restoreActiveSession(data.active_session, currentTotalGames);
+  }
   renderProbabilities();
   statusEl.textContent = "Connected";
 });
