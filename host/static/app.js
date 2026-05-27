@@ -102,8 +102,8 @@ function pushSlumpPoint() {
 }
 
 // スランプグラフの軸範囲を slumpData から決める.
-//  - 横軸(ゲーム数): 100 から 100 刻みで、ゲームが進んだら拡張(青天井)
-//  - 縦軸(差枚): ±500 から 500 刻みで拡張. ただし下側は -1000 で打ち止め
+//  - 横軸(ゲーム数): 200 から 200 刻みで、ゲームが進んだら拡張(青天井)
+//  - 縦軸(差枚): ±250 から 250 刻みで拡張. ただし下側は -1000 で打ち止め
 function slumpBounds(data) {
   let maxX = 0;
   let maxY = 0;
@@ -113,10 +113,10 @@ function slumpBounds(data) {
     if (p.y > maxY) maxY = p.y;
     if (p.y < minY) minY = p.y;
   }
-  const lower = Math.min(1000, Math.max(500, Math.ceil(-minY / 500) * 500));
+  const lower = Math.min(1000, Math.max(250, Math.ceil(-minY / 250) * 250));
   return {
-    xMax: Math.max(100, Math.ceil(maxX / 100) * 100),
-    yMax: Math.max(500, Math.ceil(maxY / 500) * 500),
+    xMax: Math.max(200, Math.ceil(maxX / 200) * 200),
+    yMax: Math.max(250, Math.ceil(maxY / 250) * 250),
     yMin: -lower,
   };
 }
@@ -158,13 +158,13 @@ function renderSlumpChart() {
             max: bounds.xMax,
             title: { display: true, text: "ゲーム数", color: "#5a6678" },
             // ゲーム数は整数なので目盛りも整数だけにする(2.5 等を出さない).
-            ticks: { color: "#5a6678", precision: 0 },
+            ticks: { color: "#5a6678", precision: 0, stepSize: 200 },
             grid: { color: "#1a2030" },
           },
           y: {
             min: bounds.yMin,
             max: bounds.yMax,
-            ticks: { color: "#5a6678", stepSize: 500 },
+            ticks: { color: "#5a6678", stepSize: 250 },
             grid: {
               color: (c) => (c.tick.value === 0 ? "#3a4456" : "#1a2030"),
             },
@@ -494,13 +494,13 @@ function renderHistorySlump(slump) {
           min: 0,
           max: b.xMax,
           title: { display: true, text: "ゲーム数", color: "#5a6678" },
-          ticks: { color: "#5a6678", precision: 0 },
+          ticks: { color: "#5a6678", precision: 0, stepSize: 200 },
           grid: { color: "#1a2030" },
         },
         y: {
           min: b.yMin,
           max: b.yMax,
-          ticks: { color: "#5a6678", stepSize: 500 },
+          ticks: { color: "#5a6678", stepSize: 250 },
           grid: { color: (c) => (c.tick.value === 0 ? "#3a4456" : "#1a2030") },
         },
       },
