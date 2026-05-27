@@ -92,12 +92,41 @@ function resetSessionCounts() {
   for (const k of KEYS) sessionCounts[k] = 0;
 }
 
-// 現在のゲーム数と連チャンゾーン(直近ボーナスから 100G 以内)を描画.
+// 直近ボーナスからのゲーム数 + 連チャンゾーン状態のキャッシュ. スコープが
+// user-session の時はこの値が GAME 表示に出る. 他スコープでは scopeStats().games
+// (今日の回転数 等) に切替.
+let machineGameCount = 0;
+let machineInRenchanZone = false;
+
+const GAME_LABEL_MAP = {
+  "user-session": null,  // labels.gameCount を使う ("現在のゲーム数")
+  "user-today":   "本日 回転数",
+  "user-all":     "通算 回転数",
+  "all-today":    "店舗 本日 回転数",
+  "all-all":      "店舗 通算 回転数",
+};
+
 function renderGameInfo(count, inZone) {
-  gameCountEl.textContent = count;
-  renchanZoneEl.classList.toggle("hidden", !inZone);
-  if (inZone) {
-    renchanRemainingEl.textContent = `残り ${Math.max(0, RENCHAN_LIMIT - count)} G`;
+  machineGameCount = count;
+  machineInRenchanZone = inZone;
+  renderGameDisplay();
+}
+
+function renderGameDisplay() {
+  const labelEl = document.getElementById("game-count-label");
+  if (probScope === "user-session") {
+    gameCountEl.textContent = machineGameCount;
+    renchanZoneEl.classList.toggle("hidden", !machineInRenchanZone);
+    if (machineInRenchanZone) {
+      renchanRemainingEl.textContent =
+        `残り ${Math.max(0, RENCHAN_LIMIT - machineGameCount)} G`;
+    }
+    if (labelEl) labelEl.textContent = labels.gameCount;
+  } else {
+    const s = scopeStats();
+    gameCountEl.textContent = s.games || 0;
+    renchanZoneEl.classList.add("hidden");
+    if (labelEl) labelEl.textContent = GAME_LABEL_MAP[probScope] || "回転数";
   }
 }
 
@@ -388,6 +417,7 @@ function renderHeroMetrics() {
   probEls.BB.textContent = fmtProb(sessGames, sessionCounts.BB);
   probEls.RB.textContent = fmtProb(sessGames, sessionCounts.RB);
   renderScopeContext();
+  renderGameDisplay();
 }
 
 // 旧名 (handle* や fetchStats から多数呼ばれているので alias で吸収)
@@ -756,7 +786,8 @@ async function loadLabels() {
   } catch {
     // 取得失敗時はデフォルトの言葉遣いのまま
   }
-  document.getElementById("game-count-label").textContent = labels.gameCount;
+  // ラベル更新は renderGameDisplay() に任せる (現在のスコープに応じた文字列を選ぶ)
+  renderGameDisplay();
   document.getElementById("renchan-zone-label").textContent = labels.renchanZone;
 }
 
