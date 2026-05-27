@@ -1,15 +1,34 @@
 #!/usr/bin/env bash
 # Start the FastAPI host server using host/.venv.
-# Stdout/stderr are mirrored to $LOG_FILE (default: ./run.log) via tee.
+# Stdout/stderr are mirrored to $LOG_FILE (default: ./run.log).
 # Any extra args are forwarded to uvicorn.
 #
 # Usage:
-#   bash run.sh                          # 0.0.0.0:8000, log -> run.log
+#   bash run.sh                          # 0.0.0.0:8000, foreground, log -> run.log
 #   HOST=127.0.0.1 PORT=8080 bash run.sh
 #   LOG_FILE=/var/log/pdc.log bash run.sh
-#   bash run.sh --reload                 # dev auto-reload
+#   bash run.sh --reload                 # dev auto-reload (foreground)
+#   bash run.sh -d                       # SSH 切断後も生存するバックグラウンド起動
+#   bash run.sh --detach --reload        # detach + uvicorn auto-reload
 
 set -euo pipefail
+
+# --- detach (SSH 切断後も生存させる) ----------------------------------------
+# 先頭の -d / --detach を吸って setsid + nohup で自分自身を再起動し、
+# 親はすぐに PID を出して exit する. 残りの引数は再起動時に渡す.
+if [[ "${1:-}" == "-d" || "${1:-}" == "--detach" ]]; then
+  shift
+  LOG_FILE_INIT="${LOG_FILE:-$(cd "$(dirname "$0")" && pwd)/run.log}"
+  echo "Detaching run.sh (logs -> $LOG_FILE_INIT)"
+  # </dev/null で stdin を切り離し、stdout/stderr をログへ. setsid で新セッ
+  # ション化することで親シェル (sshd) が死んでも SIGHUP を受け取らない.
+  setsid nohup bash "$0" "$@" </dev/null >>"$LOG_FILE_INIT" 2>&1 &
+  PID=$!
+  echo "Started detached (pid $PID). 切断 OK."
+  echo "  tail:  tail -f $LOG_FILE_INIT"
+  echo "  stop:  kill $PID    # or sudo systemctl stop pachislot-data-counter"
+  exit 0
+fi
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 HOST_DIR="$PROJECT_DIR/host"
@@ -53,10 +72,14 @@ fi
 cd "$HOST_DIR"
 
 # Banner the launch so each run is distinguishable in the appended log.
-{
-  echo
-  echo "==== run.sh started $(date -Is) host=$BIND_HOST port=$BIND_PORT args=$* ===="
-} | tee -a "$LOG_FILE"
-
-"$VENV/bin/uvicorn" app.main:app --host "$BIND_HOST" --port "$BIND_PORT" "$@" 2>&1 \
-  | tee -a "$LOG_FILE"
+banner="==== run.sh started $(date -Is) host=$BIND_HOST port=$BIND_PORT args=$* ===="
+if [[ -t 1 ]]; then
+  # Foreground: stdout が tty なのでログにも mirror.
+  printf '\n%s\n' "$banner" | tee -a "$LOG_FILE"
+  "$VENV/bin/uvicorn" app.main:app --host "$BIND_HOST" --port "$BIND_PORT" "$@" 2>&1 \
+    | tee -a "$LOG_FILE"
+else
+  # Detached / リダイレクト経由: stdout が既にログに向いているので append のみ.
+  printf '\n%s\n' "$banner" >>"$LOG_FILE"
+  exec "$VENV/bin/uvicorn" app.main:app --host "$BIND_HOST" --port "$BIND_PORT" "$@" >>"$LOG_FILE" 2>&1
+fi
