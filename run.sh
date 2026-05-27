@@ -32,6 +32,24 @@ fi
 BIND_HOST="${HOST:-0.0.0.0}"
 BIND_PORT="${PORT:-8000}"
 
+# 既存インスタンスを止めてからポートを掴む.
+if systemctl is-active --quiet pachislot-data-counter.service 2>/dev/null; then
+  echo "Stopping pachislot-data-counter.service before manual run..." | tee -a "$LOG_FILE"
+  sudo systemctl stop pachislot-data-counter.service || true
+fi
+
+if command -v fuser >/dev/null 2>&1; then
+  if fuser -s -n tcp "$BIND_PORT" 2>/dev/null; then
+    echo "Killing leftover process on tcp/$BIND_PORT..." | tee -a "$LOG_FILE"
+    sudo fuser -k -n tcp "$BIND_PORT" 2>/dev/null || fuser -k -n tcp "$BIND_PORT" 2>/dev/null || true
+    # ポート解放を待つ.
+    for _ in 1 2 3 4 5; do
+      fuser -s -n tcp "$BIND_PORT" 2>/dev/null || break
+      sleep 0.5
+    done
+  fi
+fi
+
 cd "$HOST_DIR"
 
 # Banner the launch so each run is distinguishable in the appended log.
