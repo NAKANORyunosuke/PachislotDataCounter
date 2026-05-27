@@ -206,31 +206,49 @@ def build_session_series(events: list[dict]) -> dict:
     return {"slump": slump, "payout": payout, "hits": hits}
 
 
-def window_counts(conn: sqlite3.Connection, since_iso: str) -> dict:
-    """since_iso 以降の events を集計し BB/RB/IN/OUT 数と回転数(ゲーム数)を返す.
+def window_counts(
+    conn: sqlite3.Connection,
+    since_iso: str | None = None,
+    user_id: int | None = None,
+) -> dict:
+    """events を 時間窓 / ユーザー で絞り込み、BB/RB/IN/OUT と回転数を返す.
 
-    回転数は game_id が切り替わった回数(= ゲームの数). 確率メトリクスの分母用.
+    since_iso=None で時間無制限 (全期間), user_id=None で全ユーザー.
+    user_id を指定すると sessions と join してそのユーザーの events のみ集計.
+    回転数は game_id が切り替わった回数(確率メトリクスの分母用).
     """
+    where_parts: list[str] = []
+    params: list = []
+    join_clause = ""
+    if user_id is not None:
+        join_clause = "JOIN sessions s ON s.id = e.session_id"
+        where_parts.append("s.user_id = ?")
+        params.append(user_id)
+    if since_iso is not None:
+        where_parts.append("e.ts >= ?")
+        params.append(since_iso)
+    where_sql = ("WHERE " + " AND ".join(where_parts)) if where_parts else ""
+
     rows = conn.execute(
-        "SELECT type, COUNT(*) AS n FROM events WHERE ts >= ? GROUP BY type",
-        (since_iso,),
+        f"SELECT e.type, COUNT(*) AS n FROM events e {join_clause} {where_sql} GROUP BY e.type",
+        params,
     ).fetchall()
     counts = {row["type"]: row["n"] for row in rows}
-    games = conn.execute(
-        """
+    games_row = conn.execute(
+        f"""
         SELECT COUNT(*) AS n FROM (
-            SELECT game_id, LAG(game_id) OVER (ORDER BY id) AS prev
-            FROM events WHERE ts >= ?
+            SELECT e.game_id, LAG(e.game_id) OVER (ORDER BY e.id) AS prev
+            FROM events e {join_clause} {where_sql}
         ) WHERE game_id IS NOT prev
         """,
-        (since_iso,),
-    ).fetchone()["n"]
+        params,
+    ).fetchone()
     return {
         "BB": counts.get("BB", 0),
         "RB": counts.get("RB", 0),
         "IN": counts.get("IN", 0),
         "OUT": counts.get("OUT", 0),
-        "games": games,
+        "games": games_row["n"] if games_row else 0,
     }
 
 

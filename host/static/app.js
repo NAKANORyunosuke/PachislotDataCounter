@@ -49,25 +49,37 @@ let hitChart = null;
 let hitGames = [];   // セッション中の当たりまでのゲーム数 [{type, game}]
 // 確率メトリクス用. スコープ別カウント(分母の回転数 + BB/RB).
 const PROB_SCOPE_KEY = "pdc-prob-scope";
-let probScope = localStorage.getItem(PROB_SCOPE_KEY) || "session";
+const SCOPES = [
+  "user-session", "user-today", "user-all",
+  "all-today", "all-all",
+];
+function migrateScope(v) {
+  // 旧 (session/today/boot) → 新マッピング
+  if (v === "session") return "user-session";
+  if (v === "today")   return "all-today";
+  if (v === "boot")    return "all-all";
+  return SCOPES.includes(v) ? v : "user-session";
+}
+let probScope = migrateScope(localStorage.getItem(PROB_SCOPE_KEY));
 let sessionGameBase = 0;     // セッション開始時点の total_games
-let todayStats = { BB: 0, RB: 0, games: 0 };
-let bootStats = { BB: 0, RB: 0, games: 0 };
+const EMPTY_STATS = { BB: 0, RB: 0, IN: 0, OUT: 0, games: 0 };
+let todayStats     = { ...EMPTY_STATS };
+let allStats       = { ...EMPTY_STATS };
+let userTodayStats = { ...EMPTY_STATS };
+let userAllStats   = { ...EMPTY_STATS };
 
 function renderTotals() {
   for (const k of KEYS) document.getElementById(k).textContent = totals[k];
 }
 
 function renderSessionCounts() {
-  for (const k of KEYS) {
-    const el = document.getElementById(`s-${k}`);
-    if (el) el.textContent = sessionCounts[k];
-  }
-  const diff = sessionCounts.OUT - sessionCounts.IN;
-  const diffEl = document.getElementById("s-diff");
-  diffEl.textContent = diff > 0 ? `+${diff}` : `${diff}`;
-  diffEl.classList.toggle("positive", diff > 0);
-  diffEl.classList.toggle("negative", diff < 0);
+  // セッション専用カード (IN/OUT) は常にセッション値.
+  const inEl  = document.getElementById("s-IN");
+  const outEl = document.getElementById("s-OUT");
+  if (inEl)  inEl.textContent  = sessionCounts.IN;
+  if (outEl) outEl.textContent = sessionCounts.OUT;
+  // ヒーロー (BB/RB/合成/差枚) はスコープ依存なので別関数に集約
+  renderHeroMetrics();
 }
 
 function resetSessionCounts() {
@@ -328,43 +340,84 @@ function fmtProb(games, count) {
   return `1/${(games / count).toFixed(1)}`;
 }
 
-function renderProbabilities() {
-  let bb;
-  let rb;
-  let games;
-  if (probScope === "session") {
-    bb = sessionCounts.BB;
-    rb = sessionCounts.RB;
-    games = Math.max(0, currentTotalGames - sessionGameBase);
-  } else if (probScope === "today") {
-    bb = todayStats.BB;
-    rb = todayStats.RB;
-    games = todayStats.games;
-  } else {
-    bb = bootStats.BB;
-    rb = bootStats.RB;
-    games = bootStats.games;
+function scopeStats() {
+  // スコープに応じて {BB, RB, IN, OUT, games} を返す.
+  switch (probScope) {
+    case "user-session":
+      return {
+        BB: sessionCounts.BB, RB: sessionCounts.RB,
+        IN: sessionCounts.IN, OUT: sessionCounts.OUT,
+        games: Math.max(0, currentTotalGames - sessionGameBase),
+      };
+    case "user-today": return userTodayStats;
+    case "user-all":   return userAllStats;
+    case "all-today":  return todayStats;
+    case "all-all":    return allStats;
+    default:           return EMPTY_STATS;
   }
-  probEls.BB.textContent = fmtProb(games, bb);
-  probEls.RB.textContent = fmtProb(games, rb);
-  probEls.ALL.textContent = fmtProb(games, bb + rb);
+}
+
+function renderHeroMetrics() {
+  const s = scopeStats();
+  // 3 カード (BB / RB / 合成)
+  const bbEl  = document.getElementById("s-BB");
+  const rbEl  = document.getElementById("s-RB");
+  if (bbEl) bbEl.textContent = s.BB ?? 0;
+  if (rbEl) rbEl.textContent = s.RB ?? 0;
+  probEls.ALL.textContent = fmtProb(s.games, (s.BB || 0) + (s.RB || 0));
+  // 差枚
+  const diff = (s.OUT || 0) - (s.IN || 0);
+  const diffEl = document.getElementById("s-diff");
+  if (diffEl) {
+    diffEl.textContent = diff > 0 ? `+${diff}` : `${diff}`;
+    diffEl.classList.toggle("positive", diff > 0);
+    diffEl.classList.toggle("negative", diff < 0);
+  }
+  // セッション詳細パネルの BB確率/RB確率 は常にセッションスコープで固定表示
+  const sessGames = Math.max(0, currentTotalGames - sessionGameBase);
+  probEls.BB.textContent = fmtProb(sessGames, sessionCounts.BB);
+  probEls.RB.textContent = fmtProb(sessGames, sessionCounts.RB);
+  renderScopeContext();
+}
+
+// 旧名 (handle* や fetchStats から多数呼ばれているので alias で吸収)
+const renderProbabilities = renderHeroMetrics;
+
+function renderScopeContext() {
+  const el = document.getElementById("scope-context");
+  if (!el) return;
+  const MAP = {
+    "user-session": ["ユーザー", "セッション中", "user"],
+    "user-today":   ["ユーザー", "当日",         "user"],
+    "user-all":     ["ユーザー", "累計",         "user"],
+    "all-today":    ["全体",     "当日",         "global"],
+    "all-all":      ["全体",     "全期間",       "global"],
+  };
+  const [target, period, kind] = MAP[probScope] || ["", "", "user"];
+  el.dataset.target = kind;
+  el.textContent = `${target} · ${period}`;
 }
 
 async function fetchStats() {
   try {
-    const res = await fetch("/api/stats", { cache: "no-store" });
+    const uid = activeUserId;
+    const url = uid != null ? `/api/stats?user_id=${uid}` : "/api/stats";
+    const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) return;
     const d = await res.json();
     if (d.today) todayStats = d.today;
-    if (d.boot) bootStats = d.boot;
-    renderProbabilities();
+    if (d.all)   allStats   = d.all;
+    userTodayStats = d.today_user || { ...EMPTY_STATS };
+    userAllStats   = d.all_user   || { ...EMPTY_STATS };
+    renderHeroMetrics();
   } catch {
     // ネットワーク失敗時はスキップして次のポーリングに任せる
   }
 }
 
 function setScope(scope) {
-  if (!["session", "today", "boot"].includes(scope)) return;
+  scope = migrateScope(scope);
+  if (!SCOPES.includes(scope)) return;
   probScope = scope;
   localStorage.setItem(PROB_SCOPE_KEY, scope);
   if (scopeSelectEl) {
@@ -372,7 +425,7 @@ function setScope(scope) {
       btn.classList.toggle("active", btn.dataset.scope === scope);
     }
   }
-  renderProbabilities();
+  renderHeroMetrics();
 }
 
 function renderHistoryHits(hits) {
@@ -411,7 +464,9 @@ function appendEventLog({ type, ts, session_id }) {
 }
 
 async function loadUserHistory(userId) {
+  const changed = activeUserId !== userId;
   activeUserId = userId;
+  if (changed) fetchStats();  // ユーザー切替時に user_id 付きで stats を即時更新
   const res = await fetch(`/api/users/${userId}/history`);
   if (!res.ok) return;
   const data = await res.json();

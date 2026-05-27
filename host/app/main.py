@@ -7,9 +7,6 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-# サーバ起動時刻(「電源再投入後」スコープの起点).
-SERVER_START = datetime.now(timezone.utc)
-
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -152,12 +149,24 @@ def _today_start_iso() -> str:
 
 
 @app.get("/api/stats")
-def get_stats() -> dict:
-    """確率メトリクス用の時間窓集計: 当日 / サーバ起動後 の BB/RB/IN/OUT/回転数."""
+def get_stats(user_id: int | None = None) -> dict:
+    """ヒーロー表示のスコープ用集計を返す.
+
+    全体: 当日 (today) / 全期間 (all)
+    ユーザー: 当日 (today_user) / 全期間 (all_user)  ※ user_id 指定時のみ
+    """
     with get_connection() as conn:
-        today = window_counts(conn, _today_start_iso())
-        boot = window_counts(conn, SERVER_START.isoformat())
-    return {"today": today, "boot": boot}
+        today_iso = _today_start_iso()
+        result: dict = {
+            "today": window_counts(conn, since_iso=today_iso),
+            "all": window_counts(conn),
+        }
+        if user_id is not None:
+            result["today_user"] = window_counts(
+                conn, since_iso=today_iso, user_id=user_id
+            )
+            result["all_user"] = window_counts(conn, user_id=user_id)
+    return result
 
 
 @app.get("/api/events/stream")

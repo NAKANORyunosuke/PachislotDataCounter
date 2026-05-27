@@ -23,6 +23,27 @@
     <section class="panel accent-amber hero" id="machine-panel" data-panel="machine">
       <span class="panel-label label-amber">DASHBOARD</span>
 
+      <div class="hero-scope-bar">
+        <span id="scope-context" class="scope-context" data-target="user">ユーザー · セッション中</span>
+        <div id="scope-select" class="scope-selector">
+          <div class="scope-group" data-target="user">
+            <span class="scope-group-label">ユーザー</span>
+            <div class="scope-buttons">
+              <button type="button" data-scope="user-session">セッション</button>
+              <button type="button" data-scope="user-today">当日</button>
+              <button type="button" data-scope="user-all">累計</button>
+            </div>
+          </div>
+          <div class="scope-group" data-target="global">
+            <span class="scope-group-label">全体</span>
+            <div class="scope-buttons">
+              <button type="button" data-scope="all-today">当日</button>
+              <button type="button" data-scope="all-all">全期間</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="hero-top">
         <div class="hero-game">
           <span class="muted" id="game-count-label">現在のゲーム数</span>
@@ -52,6 +73,11 @@
         </div>
       </div>
 
+      <div class="diff-row hero-diff">
+        <span class="label-tag">差枚</span>
+        <span class="seg-num" id="s-diff">0</span>
+      </div>
+
       <div class="hero-slump chart-panel" id="slump-chart-panel" data-panel="slump-chart">
         <span class="hero-section-label">SLUMP</span>
         <canvas id="slump-chart" height="200"></canvas>
@@ -66,12 +92,6 @@
           <div id="session-started">-</div>
         </div>
         <button type="button" id="session-end-hint" class="session-hint">同じカード再タップで終了</button>
-      </div>
-
-      <div id="scope-select" class="scope-select">
-        <button type="button" data-scope="session">セッション</button>
-        <button type="button" data-scope="today">当日</button>
-        <button type="button" data-scope="boot">電源後</button>
       </div>
 
       <div class="stats-grid">
@@ -91,11 +111,6 @@
           <span class="stat-label seg-blue">RB 確率</span>
           <span class="stat-value stat-sub seg-blue" id="s-prb">—</span>
         </div>
-      </div>
-
-      <div class="diff-row">
-        <span class="label-tag">差枚</span>
-        <span class="seg-num" id="s-diff">0</span>
       </div>
 
       <details class="settings-qr">
