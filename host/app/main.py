@@ -112,8 +112,29 @@ def _build_settings_url(user_id: int, request: Request | None = None) -> str:
     return f"/settings?user={user_id}"
 
 
+def _ensure_labels_json() -> None:
+    """labels.json が無ければ labels.json.example からコピーして作る.
+
+    labels.json はユーザーが現地で言葉遣いを差し替えるためのファイルで、
+    リポジトリでは追跡せず例ファイル (.example) だけ管理する.
+    """
+    target = STATIC_DIR / "labels.json"
+    if target.exists():
+        return
+    sample = STATIC_DIR / "labels.json.example"
+    if not sample.exists():
+        logger.warning("labels.json.example が見つからないのでスキップ")
+        return
+    try:
+        target.write_bytes(sample.read_bytes())
+        logger.info("labels.json を labels.json.example から生成しました")
+    except OSError as exc:
+        logger.warning("labels.json の自動生成に失敗: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _ensure_labels_json()
     init_db()
     game_counter.seed_from_db()
     tasks = [

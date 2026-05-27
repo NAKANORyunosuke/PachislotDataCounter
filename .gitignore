@@ -7,3 +7,4 @@ host/data/*.db-journal
 run.log
 *.log
 *.zip
+host/static/labels.json
