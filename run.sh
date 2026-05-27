@@ -35,72 +35,116 @@ HOST_DIR="$PROJECT_DIR/host"
 VENV="$HOST_DIR/.venv"
 LOG_FILE="${LOG_FILE:-$PROJECT_DIR/run.log}"
 
+# --- ログヘルパ -------------------------------------------------------------
+# 各ステップを [HH:MM:SS +X.XXs] 形式で出力. tee 経由なのでログにも残る.
+_last_ts="${EPOCHREALTIME:-$(date +%s.%N)}"
+log() {
+  local now ts elapsed
+  now="${EPOCHREALTIME:-$(date +%s.%N)}"
+  ts=$(date +%H:%M:%S)
+  elapsed=$(awk -v a="$now" -v b="$_last_ts" 'BEGIN { printf "%+.2fs", a - b }')
+  if [[ -t 1 ]]; then
+    printf '[%s %7s] %s\n' "$ts" "$elapsed" "$*" | tee -a "$LOG_FILE"
+  else
+    printf '[%s %7s] %s\n' "$ts" "$elapsed" "$*" >>"$LOG_FILE"
+  fi
+  _last_ts="$now"
+}
+step() {
+  printf '\n' >&2 2>/dev/null || true
+  log "==> $*"
+}
+
 if [[ ! -x "$VENV/bin/uvicorn" ]]; then
   echo "uvicorn not found in $VENV. Run setup_all.sh first." >&2
   exit 1
 fi
 
+step "run.sh start  args=$*  log=$LOG_FILE"
+
 # --- systemd unit を冪等にインストール (未登録 or 内容が古い場合のみ) ---------
-# 順序: 既存サービス停止 → ここで登録/更新 → このスクリプトの末尾で起動
 ensure_service_installed() {
   local src="$HOST_DIR/systemd/pachislot-data-counter.service"
   local dst="/etc/systemd/system/pachislot-data-counter.service"
   if [[ ! -f "$src" ]]; then
-    return  # ソースが無いリポジトリでは何もしない
+    log "ソース unit が無いのでスキップ ($src)"
+    return
   fi
   if [[ -f "$dst" ]] && cmp -s "$src" "$dst" 2>/dev/null; then
-    return  # 既に同一内容で登録済み
+    log "既に同一内容で登録済み ($dst)"
+    return
   fi
-  echo "==> Installing systemd unit: $dst"
+  log "登録/更新が必要: $dst"
   if ! sudo -n true 2>/dev/null && [[ ! -t 0 ]]; then
-    # detach 中 (tty 無し) で sudo がパスワード要求してくると詰むのでスキップ.
-    echo "  (sudo non-interactive 不可。detach 中はスキップ。手動で sudo bash host/scripts/install_service.sh を実行してください。)"
+    log "  非対話 sudo が通らない (detach 中)。スキップ。"
+    log "  手動で sudo bash host/scripts/install_service.sh を実行してください。"
     return
   fi
   if ! sudo install -m 0644 "$src" "$dst"; then
-    echo "  (sudo install 失敗。service 登録をスキップして起動を続行します。)"
+    log "  sudo install 失敗。スキップして起動を続行。"
     return
   fi
+  log "  unit 配置 OK"
   sudo systemctl daemon-reload || true
+  log "  daemon-reload 完了"
   sudo systemctl enable pachislot-data-counter 2>/dev/null || true
-  echo "  systemd unit 登録完了 (自動起動有効化)."
+  log "  enable 完了 (自動起動有効化)"
 }
 
 # Load host/.env (PUBLIC_BASE_URL etc.) so it applies to dev runs too.
+step ".env 読み込み"
 if [[ -f "$HOST_DIR/.env" ]]; then
   set -a
   # shellcheck source=/dev/null
   source "$HOST_DIR/.env"
   set +a
+  log "$HOST_DIR/.env を反映"
+else
+  log "$HOST_DIR/.env なし (スキップ)"
 fi
 
 BIND_HOST="${HOST:-0.0.0.0}"
 BIND_PORT="${PORT:-8000}"
 
-# 既存インスタンスを止めてからポートを掴む.
+# --- 既存サービス停止 -------------------------------------------------------
+step "既存サービス停止 (pachislot-data-counter)"
 if systemctl is-active --quiet pachislot-data-counter.service 2>/dev/null; then
-  echo "Stopping pachislot-data-counter.service before manual run..." | tee -a "$LOG_FILE"
+  log "active を検出。stop を発行"
   sudo systemctl stop pachislot-data-counter.service || true
+  log "stop 完了"
+else
+  log "inactive (停止不要)"
 fi
 
+# --- ポート解放 -------------------------------------------------------------
+step "ポート tcp/$BIND_PORT の解放確認"
 if command -v fuser >/dev/null 2>&1; then
   if fuser -s -n tcp "$BIND_PORT" 2>/dev/null; then
-    echo "Killing leftover process on tcp/$BIND_PORT..." | tee -a "$LOG_FILE"
+    log "占有プロセスを検出 → kill"
     sudo fuser -k -n tcp "$BIND_PORT" 2>/dev/null || fuser -k -n tcp "$BIND_PORT" 2>/dev/null || true
-    # ポート解放を待つ.
-    for _ in 1 2 3 4 5; do
-      fuser -s -n tcp "$BIND_PORT" 2>/dev/null || break
+    for i in 1 2 3 4 5; do
+      if ! fuser -s -n tcp "$BIND_PORT" 2>/dev/null; then
+        log "解放確認 ($((i*500)) ms 経過)"
+        break
+      fi
+      log "  待機中... ($((i*500)) ms)"
       sleep 0.5
     done
+  else
+    log "占有なし"
   fi
+else
+  log "fuser コマンドが無いのでスキップ"
 fi
 
-# サービス停止 (上で) → systemd unit を登録/更新 → このあと uvicorn 起動.
+# --- unit 登録 (停止後に行う) ------------------------------------------------
+step "systemd unit 登録/更新"
 ensure_service_installed
 
 cd "$HOST_DIR"
 
-# Banner the launch so each run is distinguishable in the appended log.
+# --- uvicorn 起動 -----------------------------------------------------------
+step "uvicorn 起動  host=$BIND_HOST port=$BIND_PORT extra=$*"
 banner="==== run.sh started $(date -Is) host=$BIND_HOST port=$BIND_PORT args=$* ===="
 if [[ -t 1 ]]; then
   # Foreground: stdout が tty なのでログにも mirror.
