@@ -867,6 +867,23 @@ source.onerror = () => {
 //   ユーザープロファイル    … カードのユーザーに紐づく設定, セッション中だけ反映
 // .user-off はデータ都合の .hidden とは独立に効く(両方無いときだけ表示).
 const HIDDEN_PANELS_KEY = "pdc-hidden-panels";
+const PANEL_ORDER_KEY = "pdc-panel-order";
+
+// 並び替えできるトップレベルパネルとデフォルト並び順 (= 初期 index.html 順)
+const REORDERABLE_PANELS = [
+  ["machine-panel",       "ダッシュボード"],
+  ["session-panel",       "セッション (詳細)"],
+  ["hit-history-panel",   "大当たり履歴"],
+  ["payout-panel",        "払い出し"],
+  ["totals-panel",        "電源投入後 累計"],
+  ["user-stats",          "プレイヤー累計"],
+  ["session-chart-panel", "セッション別 差枚推移"],
+  ["history-panel",       "セッション履歴"],
+  ["history-detail-panel","セッション詳細"],
+  ["event-log-panel",     "イベントログ"],
+];
+const REORDERABLE_IDS = REORDERABLE_PANELS.map(([id]) => id);
+const REORDERABLE_LABELS = Object.fromEntries(REORDERABLE_PANELS);
 const settingsToggles = document.getElementById("settings-toggles");
 const PANEL_IDS = [...settingsToggles.querySelectorAll("input[data-panel]")].map(
   (i) => i.dataset.panel
@@ -897,6 +914,105 @@ function applyHiddenPanels(hidden) {
   }
 }
 
+// --- パネル並び順 -------------------------------------------------------
+const panelOrderListEl = document.getElementById("panel-order-list");
+const DEFAULT_PANEL_ORDER = [...REORDERABLE_IDS];
+
+function normalizePanelOrder(arr) {
+  if (!Array.isArray(arr)) return [...DEFAULT_PANEL_ORDER];
+  const seen = new Set();
+  const out = [];
+  for (const id of arr) {
+    if (REORDERABLE_IDS.includes(id) && !seen.has(id)) {
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  // 欠落している ID はデフォルト順で末尾に補完
+  for (const id of DEFAULT_PANEL_ORDER) {
+    if (!seen.has(id)) out.push(id);
+  }
+  return out;
+}
+
+function readDefaultOrder() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PANEL_ORDER_KEY));
+    return normalizePanelOrder(saved);
+  } catch {
+    return [...DEFAULT_PANEL_ORDER];
+  }
+}
+
+function applyPanelOrder(order) {
+  const normalized = normalizePanelOrder(order);
+  const main = document.querySelector("main");
+  const anchor = document.getElementById("settings-panel");
+  for (const id of normalized) {
+    const el = document.getElementById(id);
+    if (el && main.contains(el)) {
+      main.insertBefore(el, anchor);
+    }
+  }
+  renderOrderList(normalized);
+}
+
+function renderOrderList(order) {
+  if (!panelOrderListEl) return;
+  panelOrderListEl.innerHTML = "";
+  order.forEach((id, idx) => {
+    const li = document.createElement("li");
+    li.dataset.panel = id;
+    li.className = "order-row";
+    const name = document.createElement("span");
+    name.className = "order-name";
+    name.textContent = REORDERABLE_LABELS[id] || id;
+    const actions = document.createElement("span");
+    actions.className = "order-actions";
+    const up = document.createElement("button");
+    up.type = "button";
+    up.dataset.move = "up";
+    up.textContent = "▲";
+    up.disabled = idx === 0;
+    const down = document.createElement("button");
+    down.type = "button";
+    down.dataset.move = "down";
+    down.textContent = "▼";
+    down.disabled = idx === order.length - 1;
+    actions.append(up, down);
+    li.append(name, actions);
+    panelOrderListEl.appendChild(li);
+  });
+}
+
+function currentOrderFromList() {
+  if (!panelOrderListEl) return [...DEFAULT_PANEL_ORDER];
+  return [...panelOrderListEl.querySelectorAll("li[data-panel]")].map(
+    (li) => li.dataset.panel,
+  );
+}
+
+if (panelOrderListEl) {
+  panelOrderListEl.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-move]");
+    if (!btn) return;
+    const li = btn.closest("li[data-panel]");
+    if (!li) return;
+    const sibling = btn.dataset.move === "up"
+      ? li.previousElementSibling
+      : li.nextElementSibling;
+    if (!sibling) return;
+    if (btn.dataset.move === "up") {
+      panelOrderListEl.insertBefore(li, sibling);
+    } else {
+      panelOrderListEl.insertBefore(sibling, li);
+    }
+    const order = currentOrderFromList();
+    localStorage.setItem(PANEL_ORDER_KEY, JSON.stringify(order));
+    applyPanelOrder(order);
+  });
+}
+
 // デフォルト(アイドル時)レイアウトを反映し、設定パネルのチェック状態も同期.
 function applyDefaultLayout() {
   const hidden = readDefaultHidden();
@@ -904,6 +1020,7 @@ function applyDefaultLayout() {
   for (const input of settingsToggles.querySelectorAll("input[data-panel]")) {
     input.checked = !hidden.includes(input.dataset.panel);
   }
+  applyPanelOrder(readDefaultOrder());
 }
 
 // セッション中: ユーザープロファイルがあればそれを、無ければデフォルトを反映.
@@ -913,6 +1030,11 @@ function applyUserProfile(settings) {
       ? settings.hidden_panels
       : readDefaultHidden();
   applyHiddenPanels(hidden);
+  const order =
+    settings && Array.isArray(settings.panel_order)
+      ? settings.panel_order
+      : readDefaultOrder();
+  applyPanelOrder(order);
 }
 
 settingsToggles.addEventListener("change", () => {

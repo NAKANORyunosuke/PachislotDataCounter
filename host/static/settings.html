@@ -4,6 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>表示設定</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800&family=Share+Tech+Mono&display=swap" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -11,39 +14,131 @@
     <h1>表示設定</h1>
     <form id="settings-form" class="form">
       <p id="who" class="muted"></p>
-      <p class="muted small">モニタに表示するパネルを選んでください。</p>
-      <div id="panel-toggles" class="toggles"></div>
+
+      <div class="settings-section">
+        <div class="settings-section-label">並び順</div>
+        <ol id="panel-order-list" class="panel-order-list"></ol>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-label">表示する項目</div>
+        <p class="muted small">モニタに表示するパネル / カードを選んでください。</p>
+        <div id="panel-toggles" class="toggles"></div>
+      </div>
+
       <button id="submit-btn" type="submit">保存する</button>
       <div id="msg" class="msg"></div>
     </form>
   </main>
   <script>
-    // index.html のパネル ID とラベルに対応させる。
-    const PANELS = [
-      ["machine-panel", "ゲーム数・連チャン"],
-      ["session-panel", "現在のセッション"],
-      ["slump-chart-panel", "差枚スランプグラフ"],
-      ["hit-history-panel", "当たりまでのゲーム数"],
+    // 並び替え対象 (トップレベルパネルのみ).
+    const REORDERABLE = [
+      ["machine-panel",       "ダッシュボード"],
+      ["session-panel",       "セッション (詳細)"],
+      ["hit-history-panel",   "大当たり履歴"],
+      ["payout-panel",        "払い出し"],
+      ["totals-panel",        "電源投入後 累計"],
+      ["user-stats",          "プレイヤー累計"],
+      ["session-chart-panel", "セッション別 差枚推移"],
+      ["history-panel",       "セッション履歴"],
+      ["history-detail-panel","セッション詳細"],
+      ["event-log-panel",     "イベントログ"],
+    ];
+    const REORDERABLE_IDS = REORDERABLE.map(([id]) => id);
+    const REORDERABLE_LABELS = Object.fromEntries(REORDERABLE);
+
+    // 表示 ON/OFF (トップレベル + サブカード).
+    const TOGGLES = [
+      ["machine-panel", "ダッシュボード"],
+      ["slump-chart-panel", "└ スランプグラフ"],
+      ["m-s-bb", "└ BB カード"],
+      ["m-s-rb", "└ RB カード"],
+      ["m-s-pall", "└ 合成カード"],
+      ["session-panel", "セッション (詳細)"],
+      ["m-s-in", "└ IN カード"],
+      ["m-s-out", "└ OUT カード"],
+      ["m-s-pbb", "└ BB 確率"],
+      ["m-s-prb", "└ RB 確率"],
+      ["hit-history-panel", "大当たり履歴"],
       ["payout-panel", "払い出し"],
-      ["totals-panel", "累計"],
-      ["user-stats", "ユーザー累計"],
+      ["totals-panel", "電源投入後 累計"],
+      ["user-stats", "プレイヤー累計"],
       ["session-chart-panel", "セッション別 差枚推移"],
       ["history-panel", "セッション履歴"],
       ["event-log-panel", "イベントログ"],
-      ["m-s-bb", "セッション: BB回数"],
-      ["m-s-rb", "セッション: RB回数"],
-      ["m-s-in", "セッション: IN"],
-      ["m-s-out", "セッション: OUT"],
-      ["m-s-pbb", "セッション: BB確率"],
-      ["m-s-prb", "セッション: RB確率"],
-      ["m-s-pall", "セッション: 合成確率"],
     ];
+
     const userId = new URLSearchParams(location.search).get("user");
     const msg = document.getElementById("msg");
     const btn = document.getElementById("submit-btn");
     const togglesEl = document.getElementById("panel-toggles");
+    const orderListEl = document.getElementById("panel-order-list");
 
-    for (const [id, label] of PANELS) {
+    function normalizeOrder(arr) {
+      const seen = new Set();
+      const out = [];
+      if (Array.isArray(arr)) {
+        for (const id of arr) {
+          if (REORDERABLE_IDS.includes(id) && !seen.has(id)) {
+            seen.add(id);
+            out.push(id);
+          }
+        }
+      }
+      for (const id of REORDERABLE_IDS) {
+        if (!seen.has(id)) out.push(id);
+      }
+      return out;
+    }
+
+    function renderOrderList(order) {
+      orderListEl.innerHTML = "";
+      order.forEach((id, idx) => {
+        const li = document.createElement("li");
+        li.dataset.panel = id;
+        li.className = "order-row";
+        const name = document.createElement("span");
+        name.className = "order-name";
+        name.textContent = REORDERABLE_LABELS[id] || id;
+        const actions = document.createElement("span");
+        actions.className = "order-actions";
+        const up = document.createElement("button");
+        up.type = "button"; up.dataset.move = "up"; up.textContent = "▲";
+        up.disabled = idx === 0;
+        const down = document.createElement("button");
+        down.type = "button"; down.dataset.move = "down"; down.textContent = "▼";
+        down.disabled = idx === order.length - 1;
+        actions.append(up, down);
+        li.append(name, actions);
+        orderListEl.appendChild(li);
+      });
+    }
+
+    function currentOrder() {
+      return [...orderListEl.querySelectorAll("li[data-panel]")].map(
+        (li) => li.dataset.panel,
+      );
+    }
+
+    orderListEl.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-move]");
+      if (!b) return;
+      e.preventDefault();
+      const li = b.closest("li[data-panel]");
+      if (!li) return;
+      const sib = b.dataset.move === "up"
+        ? li.previousElementSibling
+        : li.nextElementSibling;
+      if (!sib) return;
+      if (b.dataset.move === "up") {
+        orderListEl.insertBefore(li, sib);
+      } else {
+        orderListEl.insertBefore(sib, li);
+      }
+      renderOrderList(currentOrder());  // 再 render で ▲▼ disable 状態を更新
+    });
+
+    for (const [id, label] of TOGGLES) {
       const wrap = document.createElement("label");
       const cb = document.createElement("input");
       cb.type = "checkbox";
@@ -57,6 +152,7 @@
       if (!userId) {
         msg.textContent = "ユーザーが指定されていません。カードをかざし直してください。";
         btn.disabled = true;
+        renderOrderList([...REORDERABLE_IDS]);
         return;
       }
       try {
@@ -64,17 +160,21 @@
         if (!res.ok) {
           msg.textContent = "ユーザーが見つかりません。";
           btn.disabled = true;
+          renderOrderList([...REORDERABLE_IDS]);
           return;
         }
         const data = await res.json();
         document.getElementById("who").textContent =
           (data.name || "(未登録カード)") + " さんの表示設定";
-        const hidden = (data.display_settings && data.display_settings.hidden_panels) || [];
+        const ds = data.display_settings || {};
+        const hidden = ds.hidden_panels || [];
         for (const cb of togglesEl.querySelectorAll("input")) {
           cb.checked = !hidden.includes(cb.dataset.panel);
         }
+        renderOrderList(normalizeOrder(ds.panel_order));
       } catch (e) {
         msg.textContent = "通信エラー: " + e;
+        renderOrderList([...REORDERABLE_IDS]);
       }
     }
 
@@ -84,11 +184,12 @@
       const hidden = [...togglesEl.querySelectorAll("input")]
         .filter((cb) => !cb.checked)
         .map((cb) => cb.dataset.panel);
+      const order = currentOrder();
       try {
         const res = await fetch(`/api/users/${encodeURIComponent(userId)}/settings`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ hidden_panels: hidden }),
+          body: JSON.stringify({ hidden_panels: hidden, panel_order: order }),
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));

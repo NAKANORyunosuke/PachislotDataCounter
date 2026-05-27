@@ -978,6 +978,76 @@ details.settings-qr #session-settings-qr {
   cursor: pointer;
 }
 
+/* 並び順セクション + 表示する項目セクションを区切る */
+.settings-section {
+  margin-top: 14px;
+}
+.settings-section-label {
+  font-family: "Orbitron", sans-serif;
+  font-weight: 800;
+  font-size: 0.6rem;
+  letter-spacing: 0.2em;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+/* 並び順リスト */
+.panel-order-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  counter-reset: order;
+}
+.panel-order-list .order-row {
+  counter-increment: order;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+.panel-order-list .order-row::before {
+  content: counter(order, decimal-leading-zero);
+  font-family: "Share Tech Mono", monospace;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  min-width: 1.8rem;
+}
+.panel-order-list .order-name {
+  flex: 1;
+  color: var(--text-bright);
+}
+.panel-order-list .order-actions {
+  display: inline-flex;
+  gap: 4px;
+}
+.panel-order-list .order-actions button {
+  background: rgba(95, 228, 255, 0.06);
+  border: 1px solid rgba(95, 228, 255, 0.22);
+  color: var(--cyan);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+  transition: background 0.12s, box-shadow 0.15s;
+}
+.panel-order-list .order-actions button:hover:not(:disabled) {
+  background: rgba(95, 228, 255, 0.18);
+  box-shadow: 0 0 6px var(--cyan-a);
+}
+.panel-order-list .order-actions button:disabled {
+  opacity: 0.22;
+  cursor: not-allowed;
+}
+
 /* ============================================================
    14. STATUS LINE (下部システム表示)
    ============================================================ */

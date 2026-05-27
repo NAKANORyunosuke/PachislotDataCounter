@@ -322,7 +322,16 @@ async def post_user_settings(user_id: int, request: Request) -> dict:
         raise HTTPException(
             status_code=400, detail="hidden_panels must be a list of strings"
         )
-    settings = {"hidden_panels": hidden}
+    order = body.get("panel_order")
+    if order is not None and (
+        not isinstance(order, list) or not all(isinstance(x, str) for x in order)
+    ):
+        raise HTTPException(
+            status_code=400, detail="panel_order must be a list of strings"
+        )
+    settings: dict = {"hidden_panels": hidden}
+    if order is not None:
+        settings["panel_order"] = order
     with get_connection() as conn:
         if get_user_by_id(conn, user_id) is None:
             raise HTTPException(status_code=404, detail="user not found")

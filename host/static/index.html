@@ -204,6 +204,14 @@
 
     <details class="panel" id="settings-panel" data-panel="settings">
       <summary>表示設定</summary>
+
+      <div class="settings-section">
+        <div class="settings-section-label">並び順</div>
+        <ol id="panel-order-list" class="panel-order-list"></ol>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-label">表示する項目</div>
       <div id="settings-toggles" class="toggles">
         <label><input type="checkbox" data-panel="machine-panel" checked /> ダッシュボード (GAME/BB/RB/合成/スランプ)</label>
         <label><input type="checkbox" data-panel="slump-chart-panel" checked /> └ スランプグラフ</label>
@@ -222,6 +230,7 @@
         <label><input type="checkbox" data-panel="session-chart-panel" checked /> セッション別 差枚推移</label>
         <label><input type="checkbox" data-panel="history-panel" checked /> セッション履歴</label>
         <label><input type="checkbox" data-panel="event-log-panel" checked /> イベントログ</label>
+      </div>
       </div>
     </details>
 
